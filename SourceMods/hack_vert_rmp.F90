@@ -10,6 +10,7 @@ module hack_vert_rmp
   public :: get_levels
   public :: overwrite_state
   public :: write_data
+  public :: diagnostic
 
 contains
 
@@ -260,5 +261,45 @@ contains
     end if
   end subroutine write_data
 
+  subroutine diagnostic(dpu,dpt,dpk,filenum)
+    use spmd_utils,       only: masterproc
+    integer           :: unitn,k,sz,dpk_k
+    integer,intent(in):: filenum
+    character(len=256):: filename
+    real(KIND=r8), dimension(np,np,nlev,1),intent(in)::dpu,dpk,dpt
+    !real(KIND=r8), dimension(np,np,nlev,1),intent(in)::dpu,dpk
+    
+    if (masterproc) then
+
+      unitn = 8
+      sz = size(dpu(1,1,:,1))
+      !writing 2-column file for temp state 
+      write (filename, '("dpu_", I0.3, ".dat")' )  filenum
+      open(unitn, file=trim(filename), status='replace' )
+      do k=1,sz
+        write(unitn,*) dpu(1,1,k,1)
+      end do
+      close(unitn)
+
+      sz = size(dpt(1,1,:,1))
+      write (filename, '("dpt_", I0.3, ".dat")' )  filenum
+      open(unitn, file=trim(filename), status='replace' )
+      do k=1,sz
+        write(unitn,*) dpt(1,1,k,1)
+      end do
+      close(unitn)
+
+      sz = size(dpk(1,1,:,1))
+      write (filename, '("dpk_", I0.3, ".dat")' )  filenum
+      open(unitn, file=trim(filename), status='replace' )
+      do k=1,sz
+        dpk_k = (1/2.)*dpk(1,1,k,1)
+        write(unitn,*) dpk_k
+      end do
+      close(unitn)
+
+
+    end if
+  end subroutine diagnostic
 
 end module hack_vert_rmp

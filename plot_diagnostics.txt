@@ -1,0 +1,62 @@
+#!/usr/bin/gnuplot -persist
+#Gnuplot script for plotting vertical remapping profiles diagnostics
+#By Manuel Valera 05/26/17
+
+do for [t=99:99] {
+
+set terminal pngcairo enhanced font 'Verdana,10'
+if (t<10){ set output "diagnostic_TE_0".t.".png" } else { set output "diagnostic_TE_".t.".png" }
+set multiplot layout 3, 1;
+
+set title "{/Symbol D}p*u"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+if (t<10){
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpu_00'.t.'.dat'\
+u ($2-$1)/($1) w lp 
+}else{
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpu_0'.t.'.dat'\
+u ($2-$1)/($1) w lp 
+}
+
+set title "{/Symbol D}p*T*C_p"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+set logscale y
+
+if (t<10){
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpt_00'.t.'.dat'\
+u ($2-$1)/($1)  w lp
+}else{
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpt_0'.t.'.dat'\
+u ($2-$1)/($1) w lp
+}
+unset logscale y
+
+set title "K"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale off
+
+if (t<10){
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpk_00'.t.'.dat'\
+u ($2-$1)/($1) w lp
+}else{
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpk_0'.t.'.dat'\
+u ($2-$1)/($1) w lp
+}
+
+unset multiplot
+}
+

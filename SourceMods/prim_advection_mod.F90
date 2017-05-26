@@ -990,7 +990,7 @@ contains
     use control_mod,            only : se_prescribed_wind_2d
     use dimensions_mod        , only : ntrac
     use dimensions_mod        , only : qsize_condensate_loading, qsize_condensate_loading_idx
-    use hack_vert_rmp         , only : get_levels,overwrite_state,write_data,lhack_vert_rmp
+    use hack_vert_rmp         , only : get_levels,overwrite_state,write_data,diagnostic,lhack_vert_rmp
     use spmd_utils            , only: masterproc
     
     type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
@@ -1063,6 +1063,10 @@ contains
 
         call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),0) !Print state 0
 
+        call diagnostic(dp_star_moist*elem(ie)%state%v(:,:,1,:,np1),&
+                dp_star_moist*elem(ie)%state%t(:,:,:,np1)*cpair,&
+                dp_star_moist*(elem(ie)%state%v(:,:,1,:,np1)**2),0)  !diagnostic stage 0 
+
                 !END hacked-profile
 
       else                                              !Preserving old code
@@ -1099,11 +1103,11 @@ contains
       end if                
 
 
-      remap_te = .true.!.true.
+      remap_te = .false.!.true.
 
 
       if(lhack_vert_rmp) then
-        do i=1,100
+        do i=1,99
         ! remap the dynamics i-times:
           if(remap_te)then
                 ! remap u,v and cpair*T + .5 u^2
@@ -1164,7 +1168,7 @@ contains
 
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_moist  !u_rmp*dp_moist
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_moist  !v_rmp*dp_moist
-          call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v_rmp*dp_star_moist
+          call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
           !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
 
           if ( .not. se_prescribed_wind_2d ) &
@@ -1181,8 +1185,12 @@ contains
           end if
 
         !writing remapped T state:
-
         call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i) 
+
+        call diagnostic(dp_star_moist*elem(ie)%state%v(:,:,1,:,np1),&
+                dp_star_moist*elem(ie)%state%t(:,:,:,np1)*cpair,&
+                dp_star_moist*(elem(ie)%state%v(:,:,1,:,np1)**2),i)    !diagnostic stage i
+
 
         end do  !END OF REMAPPING  
       else    !if not hack-remapping:
