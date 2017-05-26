@@ -1,0 +1,57 @@
+#!/usr/bin/gnuplot -persist
+#Gnuplot script for plotting vertical remapping profiles5 
+#By Manuel Valera 05/24/17
+
+do for [t=1:5] {
+
+set terminal pngcairo enhanced font 'Verdana,10'
+set output "vert_prof_T_".t.".png"
+set multiplot layout 1, 2 ;
+
+set title "Vertical remap"
+set xlabel "T(K)"
+set ylabel "P(hPa)"
+set format y '%g'
+set key right bottom
+set logscale xy
+
+plot "/scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat" u 2:1 w lp t "dp\\\_moist t=0",\
+"/scratch/cluster/mvalera/vrmp/run/p_k_T_00".t.".dat" u 2:1 w lp t "dp\\\_moist t=".t
+
+set title "Aberration"
+set xlabel "{/Symbol D}T(K)"
+set ylabel "P(hPa)"
+set format y '%g'
+set key right bottom
+set logscale xy
+
+plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "Teps"
+
+unset multiplot
+
+set output "vert_prof_u_".t.".png"
+set multiplot layout 1, 2 ;
+
+set title "Vertical remap"
+set xlabel "u(m/s)"
+set ylabel "P(hPa)"
+set format y '%g'
+set key right bottom
+set logscale xy
+
+plot "/scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat" u 2:1 w lp t "dp\\\_moist t=0",\
+"/scratch/cluster/mvalera/vrmp/run/p_k_u_00".t.".dat" u 2:1 w lp t "dp\\\_moist t=".t
+
+set title "Aberration"
+set xlabel "{/Symbol D}u(m/s)"
+set ylabel "P(hPa)"
+set format y '%g'
+set key right bottom
+set logscale xy
+
+plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_u_00'.t.'.dat' u ($4-$2):1 w lp t "Teps"
+
+unset multiplot
+}
+# EOF
+

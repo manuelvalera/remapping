@@ -1,5 +1,6 @@
 # Prerequisites
 *.d
+*.F90~
 
 # Compiled Object files
 *.slo
