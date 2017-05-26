@@ -1004,7 +1004,7 @@ contains
     type (hvcoord_t) :: hvcoord
     real (kind=r8)   :: dt
     integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst,temp_int
-    real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry
+    real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry,dp_s_inv
     real (kind=r8), dimension(np,np,nlev,2):: ttmp
     real(KIND=r8), dimension(nlev+1) :: pint1,pint2
     real(KIND=r8), dimension(nlev) :: t0
@@ -1034,30 +1034,24 @@ contains
            sum(elem(ie)%state%dp3d(:,:,:,np1),3)
       !
       if(lhack_vert_rmp) then                           !Remapping fixed profile
-                !TODO: .- code levels (harcoded?)
-                !      .- substitute levels by thickness by subtracting
-                !      l(2)-l(1) CHECK
-                !      .- replace dp_star_moist() and dp_moist() by these. CHECK
-                !      .- recompile and rerun CHECK
-                !      .- remap back-forth 100 times 
-                !      .- visualize (??)
-
+           
         call get_levels(1,pint1,pint2,t0) !option 1 is CAM5
  
         dp_star_moist = 0.0d0 !initializing as zeros
         dp_moist = 0.0d0
         ttmp = 0.0d0
 
-        !pint1 = 1.0_R8/pint1
-        !pint2 = 1.0_R8/pint2
-      
-        do k=1,size(t0)!nlev
+        do k=1,size(t0)
                  
                  dp_star_moist(:,:,k) = pint1(k+1)-pint1(k) 
                  
                  dp_moist(:,:,k) = pint2(k+1)-pint2(k) 
                            
                  elem(ie)%state%t(:,:,k,np1) = t0(k)
+
+                 !setting velocities to zero:
+                 !elem(ie)%state%v(:,:,1,:,np1) = 0.0d0
+                 !elem(ie)%state%v(:,:,2,:,np1) = 0.0d0
                 
         end do
 
@@ -1065,9 +1059,12 @@ contains
         if (minval(dp_moist)<0) call endrun('negative layer thickness.  timestep or remap time too large')
 
         dp_inv=1.0_R8/dp_moist !for efficiency
+        dp_s_inv=1.0_R8/dp_star_moist
 
         call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),0) !Print state 0
+
                 !END hacked-profile
+
       else                                              !Preserving old code
         do k=1,nlev
                 dp_dry(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
@@ -1102,48 +1099,48 @@ contains
       end if                
 
 
-      remap_te = .true.
+      remap_te = .true.!.true.
 
 
       if(lhack_vert_rmp) then
-        do i=1,5
+        do i=1,100
         ! remap the dynamics i-times:
           if(remap_te)then
                 ! remap u,v and cpair*T + .5 u^2
                 ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
                         elem(ie)%state%t(:,:,:,np1)*cpair !Energy
+                ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !E*dp_star_moist
+                call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
+                elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !E_rmp (as t) 
           else
-                ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) 
+                ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T
+                ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !T*dp_star_moist
+                call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !T_rmp*dp_moist
+                elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !T_rmp 
           end if
 
-        ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist
-        call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist)
-        elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !Energy K+TCp rmp
-
-
-        !second temp lag (star) -> (eul)    
+          !remap star (lag) -> (eul)    
  
-        ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u
-        ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v
-        call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)
-        !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
+          ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u*dp_star_moist
+          ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v*dp_star_moist
+          call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
+          !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
 
           if ( .not. se_prescribed_wind_2d ) &
                  elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)*dp_inv    !u_rmp
           if ( .not. se_prescribed_wind_2d ) &
                  elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_inv    !v_rmp
-        !extract velocities from here
+
 
           if(remap_te)then
                 ! back out T from TE
                 elem(ie)%state%t(:,:,:,np1) = &
                 ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
-                elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair           !T_rmp
-          end if
-       
-        !writing remapped T state:
-        call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i)
+                elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair        !T_rmp (E_rmp as t is used)
+          end if     
+
+!        call write_data(pint2,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i)!
 
 
         !REMAPPING BACK....
@@ -1152,37 +1149,43 @@ contains
               ! remap u,v and cpair*T + .5 u^2
               ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair                    !T_rmp
+                        elem(ie)%state%t(:,:,:,np1)*cpair             !E_rmp
+              ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !E_rmp*dp_moist                   
+              call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
+              elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !E (as t)
           else
-              ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1)
+              ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T_rmp            
+              ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !T_rmp*dp_moist
+              call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !T*dp_star_moist
+              elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !T 
           end if
 
-        ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_inv
-        call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist)
-        elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_star_moist  !Energy K+TCp 
+          !second temp lag (star) -> (eul)    
 
-
-        !second temp lag (star) -> (eul)    
-
-        ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_inv  !u_rmp
-        ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_inv  !v_rmp
-        call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)
-        !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
+          ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_moist  !u_rmp*dp_moist
+          ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_moist  !v_rmp*dp_moist
+          call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v_rmp*dp_star_moist
+          !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
 
           if ( .not. se_prescribed_wind_2d ) &
-                elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)*dp_star_moist    !u
+                elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)*dp_s_inv    !u
           if ( .not. se_prescribed_wind_2d ) &
-                elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_star_moist    !v
-        !extract velocities from here
+                elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_s_inv    !v
+
 
           if(remap_te)then
           ! back out T from TE
                 elem(ie)%state%t(:,:,:,np1) = &
                         ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 +&
-                        elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair           !T
+                        elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair     !T (E as t is used)
           end if
+
+        !writing remapped T state:
+
+        call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i) 
+
         end do  !END OF REMAPPING  
-        else    !if not hack-remapping:
+      else    !if not hack-remapping:
           if(remap_te)then
                 ! remap u,v and cpair*T + .5 u^2
                 ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
@@ -1194,7 +1197,7 @@ contains
 
           ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist
           call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist)
-          elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !Energy K+TCp rmp
+          elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  
       
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v
