@@ -1,14 +1,16 @@
 #!/usr/bin/gnuplot -persist
 #Gnuplot script for plotting vertical remapping profiles diagnostics
-#By Manuel Valera 05/26/17
+#By Manuel Valera 05/30/17
 
-do for [t=99:99] {
+#Defining error phi_max = ( max(phi) - max(phi_0) ) / ( max(phi_0)-min(phi_0) )
+# phi_min = ( min(phi) - min(phi_0) ) / ( max(phi_0) - min(phi_0) )
+# l_inf = max|phi - phi_0| / max|phi_0|
 
 set terminal pngcairo enhanced font 'Verdana,10'
-if (t<10){ set output "diagnostic_TE_0".t.".png" } else { set output "diagnostic_TE_".t.".png" }
-set multiplot layout 3, 1;
+set output "dpu_error_TE.png"
+set multiplot layout 3, 1 title "{/Symbol D}p*u error" font ",12";
 
-set title "{/Symbol D}p*u"
+set title " {/Symbol F}_{max}"
 #set xlabel "T(K)"
 set ylabel "error"
 #set xrange auto
@@ -16,47 +18,98 @@ set format y '%g'
 set key off #right bottom
 #set logscale y
 
-if (t<10){
-plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpu_00'.t.'.dat'\
-u ($2-$1)/($1) w lp 
-}else{
-plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpu_0'.t.'.dat'\
-u ($2-$1)/($1) w lp 
-}
+plot '/scratch/cluster/mvalera/vrmp/run/dpu_errors.dat' u 1 w lp 
 
-set title "{/Symbol D}p*T*C_p"
+set title " {/Symbol F}_{min}"
 #set xlabel "T(K)"
 set ylabel "error"
 #set xrange auto
 set format y '%g'
 set key off #right bottom
-set logscale y
+#set logscale y
 
-if (t<10){
-plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpt_00'.t.'.dat'\
-u ($2-$1)/($1)  w lp
-}else{
-plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpt_0'.t.'.dat'\
-u ($2-$1)/($1) w lp
-}
-unset logscale y
+plot '/scratch/cluster/mvalera/vrmp/run/dpu_errors.dat' u 2 w lp    
 
-set title "K"
+set title " l_{inf}"
 #set xlabel "T(K)"
 set ylabel "error"
 #set xrange auto
 set format y '%g'
 set key off #right bottom
-#set logscale off
+#set logscale y
 
-if (t<10){
-plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpk_00'.t.'.dat'\
-u ($2-$1)/($1) w lp
-}else{
-plot '< paste /scratch/cluster/mvalera/vrmp/run/dpu_000.dat /scratch/cluster/mvalera/vrmp/run/dpk_0'.t.'.dat'\
-u ($2-$1)/($1) w lp
-}
+plot '/scratch/cluster/mvalera/vrmp/run/dpu_errors.dat' u 3 w lp    
 
 unset multiplot
-}
+
+set output "dpt_error_TE.png"
+set multiplot layout 3, 1 title "{/Symbol D}p*T*C_p error" font ",12";
+
+set title " {/Symbol F}_{max}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpt_errors.dat' u 1 w lp
+
+set title " {/Symbol F}_{min}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpt_errors.dat' u 2 w lp
+
+set title " l_{inf}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpt_errors.dat' u 3 w lp
+
+unset multiplot
+
+set output "dpk_error_TE.png"
+set multiplot layout 3, 1 title "Kinetic error" font ",12";
+
+set title " {/Symbol F}_{max}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors.dat' u 1 w lp
+
+set title " {/Symbol F}_{min}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors.dat' u 2 w lp
+
+set title " l_{inf}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key off #right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors.dat' u 3 w lp
+
+unset multiplot
+
 

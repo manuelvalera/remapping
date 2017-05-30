@@ -11,6 +11,7 @@ module hack_vert_rmp
   public :: overwrite_state
   public :: write_data
   public :: diagnostic
+  public :: trapezoid_integration
 
 contains
 
@@ -267,7 +268,300 @@ contains
     integer,intent(in):: filenum
     character(len=256):: filename
     real(KIND=r8), dimension(np,np,nlev,1),intent(in)::dpu,dpk,dpt
+    real(KIND=r8)      :: delta_phi_0,m_0,phi_max,phi_min,l_inf,l_2,I_n,I_d,end_val
+    real(KIND=r8),dimension(nlev)  :: dpu_0,dpt_0,dpk_0
+    real(KIND=r8),  parameter :: PI=4*atan(1.0)
+
+    if (masterproc) then
+
+      end_val = 2*PI
+      unitn = 8
+
+      !Treating state 0:
+      if (filenum == 0)then
+        
+        !dpu_phi_max:
+        delta_phi_0 = MAXVAL(dpu(1,1,:,1)) - MINVAL(dpu(1,1,:,1))
+        m_0 =  MAXVAL(dpu(1,1,:,1))
+        write (filename, '("dpu_phi_max_0.dat")' ) 
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) delta_phi_0, m_0
+        close(unitn)
+
+
+        !dpu_phi_min:
+        m_0 =  MINVAL(dpu(1,1,:,1))
+        write (filename, '("dpu_phi_min_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) delta_phi_0, m_0
+        close(unitn)
+
+
+        !dpu_l_inf, dpu_l_2:
+        write (filename, '("dpu_l_inf_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) dpu(1,1,:,1)
+        close(unitn)
+
+        write (filename, '("dpu_errors.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        close(unitn)
+
+        write (filename, '("dpu_sum.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) SUM(dpu(1,1,:,1))
+        close(unitn)
+
+
+      !dpt
+        !dpt_phi_max:
+        delta_phi_0 = MAXVAL(dpt(1,1,:,1)) - MINVAL(dpt(1,1,:,1))
+        m_0 =  MAXVAL(dpt(1,1,:,1))
+        write (filename, '("dpt_phi_max_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) delta_phi_0, m_0
+        close(unitn)
+
+
+        !dpt_phi_min:
+        m_0 =  MINVAL(dpt(1,1,:,1))
+        write (filename, '("dpt_phi_min_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) delta_phi_0, m_0
+        close(unitn)
+
+
+        !dpt_l_inf:
+        write (filename, '("dpt_l_inf_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) dpt(1,1,:,1)
+        close(unitn)
+
+
+        write (filename, '("dpt_errors.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        close(unitn)
+
+        write (filename, '("dpt_sum.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) SUM(dpt(1,1,:,1))
+        close(unitn)
+      !dpk
+        !dpk_phi_max:
+        delta_phi_0 = MAXVAL(dpk(1,1,:,1)) - MINVAL(dpk(1,1,:,1))
+        m_0 =  MAXVAL(dpk(1,1,:,1))
+        write (filename, '("dpk_phi_max_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) delta_phi_0, m_0
+        close(unitn)
+
+
+        !dpk_phi_min:
+        m_0 =  MINVAL(dpk(1,1,:,1))
+        write (filename, '("dpk_phi_min_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) delta_phi_0, m_0
+        close(unitn)
+
+
+        !dpk_l_inf:
+        write (filename, '("dpk_l_inf_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) dpk(1,1,:,1)
+        close(unitn)
+
+
+        write (filename, '("dpk_errors.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        close(unitn)
+
+        write (filename, '("dpk_sum.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) SUM(dpk(1,1,:,1))
+        close(unitn)
+
+      !state /= 0
+      else
+      !dpu 
+        !dpu_phi_max:
+        filename = "dpu_phi_max_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) delta_phi_0, m_0              !read state 0
+        close(unitn)
+
+        phi_max = (MAXVAL(dpu(1,1,:,1)) - m_0) / delta_phi_0  
+
+        !dpu_phi_min:
+        filename = "dpu_phi_min_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) delta_phi_0, m_0              !read state 0
+        close(unitn)
+       
+        phi_min = (MINVAL(dpu(1,1,:,1)) - m_0) / delta_phi_0
+
+        !dpu_l_inf:
+        filename = "dpu_l_inf_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) dpu_0                         !read state 0    
+        close(unitn)
+
+        l_inf = MAXVAL(ABS(dpu(1,1,:,1) - dpu_0)) / MAXVAL(ABS(dpu_0))
+        
+        !dpu_l_2:
+
+        call trapezoid_integration((dpu(1,1,:,1)-dpu_0)**2,end_val,I_n) 
+        call trapezoid_integration(dpu_0**2,end_val,I_d) 
+
+        I_n = I_n/(4*PI)
+        I_d = I_d/(4*PI)
+
+        l_2 = SQRT( I_n / I_d )
+
+        write (filename, '("dpu_errors.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) phi_max,phi_min,l_inf,l_2
+        close(unitn)
+
+        write (filename, '("dpu_sum.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) SUM(dpu(1,1,:,1))
+        close(unitn)
+
+
+      !dpt
+        !dpt_phi_max:
+        filename = "dpt_phi_max_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) delta_phi_0, m_0              !read state 0
+        close(unitn)
+
+        phi_max = (MAXVAL(dpt(1,1,:,1)) - m_0) / delta_phi_0
+
+        !dpt_phi_min:
+        filename = "dpt_phi_min_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) delta_phi_0, m_0              !read state 0
+        close(unitn)
+
+        phi_min = (MINVAL(dpt(1,1,:,1)) - m_0) / delta_phi_0
+
+        !dpt_l_inf:
+        filename = "dpt_l_inf_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) dpt_0                         !read state 0    
+        close(unitn)
+
+        l_inf = MAXVAL(ABS(dpt(1,1,:,1) - dpt_0)) / MAXVAL(ABS(dpt_0))
+
+        !dpt_l_2:
+
+        call trapezoid_integration((dpt(1,1,:,1)-dpt_0)**2,end_val,I_n)
+        call trapezoid_integration(dpt_0**2,end_val,I_d)
+
+        I_n = I_n/(4*PI)
+        I_d = I_d/(4*PI)
+
+        l_2 = SQRT( I_n / I_d )
+
+        write (filename, '("dpt_errors.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) phi_max,phi_min,l_inf,l_2
+        close(unitn)
+
+        write (filename, '("dpt_sum.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) SUM(dpt(1,1,:,1))
+        close(unitn)
+
+
+       !dpk
+        !dpk_phi_max:
+        filename = "dpk_phi_max_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) delta_phi_0, m_0              !read state 0
+        close(unitn)
+      
+        phi_max = (MAXVAL(dpk(1,1,:,1)) - m_0) / delta_phi_0
+    
+        !dpk_phi_min:
+        filename = "dpk_phi_min_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) delta_phi_0, m_0              !read state 0
+        close(unitn)  
+    
+        phi_min = (MINVAL(dpk(1,1,:,1)) - m_0) / delta_phi_0
+
+        !dpk_l_inf:
+        filename = "dpk_l_inf_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) dpk_0                         !read state 0    
+        close(unitn)
+      
+        l_inf = MAXVAL(ABS(dpk(1,1,:,1) - dpk_0)) / MAXVAL(ABS(dpk_0))
+
+        !dpk_l_2:
+
+        call trapezoid_integration((dpk(1,1,:,1)-dpk_0)**2,end_val,I_n)
+        call trapezoid_integration(dpk_0**2,end_val,I_d)
+
+        I_n = I_n/(4*PI)
+        I_d = I_d/(4*PI)
+
+        l_2 = SQRT( I_n / I_d )
+      
+        write (filename, '("dpk_errors.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) phi_max,phi_min,l_inf,l_2
+        close(unitn)
+
+        write (filename, '("dpk_sum.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) SUM(dpk(1,1,:,1))
+        close(unitn)
+
+      
+      end if
+
+
+      
+    end if
+  end subroutine diagnostic
+
+
+  subroutine trapezoid_integration(array,end_val,integral)
+  !Routine for numerical integration of an array using trapezoid rule,
+  !adapted from http://f90in15minutes.wikidot.com/numerical-integration
+      implicit none
+     
+      real(KIND=r8),intent(in),dimension(nlev) ::  array
+      real(KIND=r8),intent(in) ::  end_val
+      real(KIND=r8),intent(out) ::  integral
+      real(KIND=r8) :: u,h
+      integer :: i
+
+      integral = 0.0
+
+      do i=1,size(array)        
+         if ((i.eq.1).or.(i.eq.size(array))) then
+            integral = integral+array(i)
+         else
+            integral = integral+(2.0*array(i))
+         end if
+      end do
+
+      h=end_val/size(array)
+      integral = (h/2.0)*integral
+
+  end subroutine trapezoid_integration
+
+  subroutine diagnostic_old(dpu,dpt,dpk,filenum)
+    use spmd_utils,       only: masterproc
+    integer           :: unitn,k,sz,dpk_k
+    integer,intent(in):: filenum
+    character(len=256):: filename
+    real(KIND=r8), dimension(np,np,nlev,1),intent(in)::dpu,dpk,dpt
     !real(KIND=r8), dimension(np,np,nlev,1),intent(in)::dpu,dpk
+    
     
     if (masterproc) then
 
@@ -300,6 +594,6 @@ contains
 
 
     end if
-  end subroutine diagnostic
+  end subroutine diagnostic_old
 
 end module hack_vert_rmp

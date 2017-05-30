@@ -1103,7 +1103,7 @@ contains
       end if                
 
 
-      remap_te = .false.!.true.
+      remap_te = .true.!.true.
 
 
       if(lhack_vert_rmp) then
