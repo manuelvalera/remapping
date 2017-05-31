@@ -984,7 +984,7 @@ contains
     !
     
     use hybvcoord_mod, only          : hvcoord_t
-    use vertremap_mod,          only : remap1!, remap1_nofilter
+    use vertremap_mod,          only : remap1, remap1_nofilter
     use hybrid_mod            , only : hybrid_t!, set_region_num_threads
     use fvm_control_volume_mod, only : fvm_struct
     use control_mod,            only : se_prescribed_wind_2d
@@ -992,7 +992,9 @@ contains
     use dimensions_mod        , only : qsize_condensate_loading, qsize_condensate_loading_idx
     use hack_vert_rmp         , only : get_levels,overwrite_state,write_data,diagnostic,lhack_vert_rmp
     use spmd_utils            , only: masterproc
-    
+    use physconst,              only: r_universal
+
+
     type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
     type(fvm_struct), intent(inout) :: fvm(:)
     type (element_t), intent(inout) :: elem(:)
@@ -1003,12 +1005,13 @@ contains
     
     type (hvcoord_t) :: hvcoord
     real (kind=r8)   :: dt
-    integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst,temp_int
+    integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
+    character(len=256):: filename
     real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry,dp_s_inv
-    real (kind=r8), dimension(np,np,nlev,2):: ttmp
+    real (kind=r8), dimension(np,np,nlev,2):: ttmp,phi
     real(KIND=r8), dimension(nlev+1) :: pint1,pint2
-    real(KIND=r8), dimension(nlev) :: t0
-    logical          :: remap_te    
+    real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
+    logical          :: remap_te,filtered    
     
     ! reference levels:
     !   dp(k) = (hyai(k+1)-hyai(k))*ps0 + (hybi(k+1)-hybi(k))*ps(i,j)
@@ -1040,12 +1043,15 @@ contains
         dp_star_moist = 0.0d0 !initializing as zeros
         dp_moist = 0.0d0
         ttmp = 0.0d0
+        phi = 0.0d0
 
         do k=1,size(t0)
                  
-                 dp_star_moist(:,:,k) = pint1(k+1)-pint1(k) 
+                 dp_star_moist(:,:,k) = pint1(k+1)-pint1(k)
+                 lnp1(k) = log(dp_star_moist(1,1,k))
                  
                  dp_moist(:,:,k) = pint2(k+1)-pint2(k) 
+                 lnp2(k) = log(dp_moist(1,1,k))
                            
                  elem(ie)%state%t(:,:,k,np1) = t0(k)
 
@@ -1104,23 +1110,40 @@ contains
 
 
       remap_te = .true.!.true.
-
+      filtered = .false.
 
       if(lhack_vert_rmp) then
         do i=1,99
         ! remap the dynamics i-times:
           if(remap_te)then
                 ! remap u,v and cpair*T + .5 u^2
+                phi(1,1,:,1) = r_universal*elem(ie)%state%t(1,1,:,np1)*lnp2
+                if(masterproc)then
+                        write (filename, '("phi_", I0.3, ".dat")' )  i
+                        open(unitn, file=trim(filename), status='replace' )
+                        do k=1,size(phi(1,1,:,1))
+                                write(unitn,*) phi(1,1,k,1)
+                        end do
+                        close(unitn)
+                endif
                 ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair !Energy
+                        elem(ie)%state%t(:,:,:,np1)*cpair - phi(:,:,:,1) !Energy 
                 ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !E*dp_star_moist
-                call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
+                if(filtered)then
+                        call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
+                else
+                call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+                end if
                 elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !E_rmp (as t) 
           else
                 ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T
                 ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !T*dp_star_moist
-                call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !T_rmp*dp_moist
+                if(filtered)then
+                        call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !T_rmp*dp_moist
+                else
+                        call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+                end if
                 elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !T_rmp 
           end if
 
@@ -1128,7 +1151,11 @@ contains
  
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u*dp_star_moist
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v*dp_star_moist
-          call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
+          if(filtered)then
+                  call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
+          else
+                  call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+          end if
           !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
 
           if ( .not. se_prescribed_wind_2d ) &
@@ -1141,7 +1168,12 @@ contains
                 ! back out T from TE
                 elem(ie)%state%t(:,:,:,np1) = &
                 ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
-                elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair        !T_rmp (E_rmp as t is used)
+                elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair  !T_rmp (E_rmp as t is used)
+                do k=1,nlev
+                        ttmp(1,1,k,1) = 1 - r_universal/cpair*(log(pint1(k+1))-log(pint1(k)))/&
+                                                                        (pint1(k+1)-pint1(k))
+                        elem(ie)%state%t(1,1,k,np1) = (elem(ie)%state%t(1,1,k,np1)-phi(1,1,k,1))/ttmp(1,1,k,1) 
+                end do
           end if     
 
 !        call write_data(pint2,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i)!
@@ -1151,16 +1183,25 @@ contains
 
           if(remap_te)then
               ! remap u,v and cpair*T + .5 u^2
+              phi(1,1,:,1) = r_universal*elem(ie)%state%t(1,1,:,np1)*lnp1
               ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair             !E_rmp
+                        elem(ie)%state%t(:,:,:,np1)*cpair - phi(:,:,:,1) !E_rmp
               ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !E_rmp*dp_moist                   
-              call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
+              if(filtered)then
+                      call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
+              else
+                      call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
+              end if
               elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !E (as t)
           else
               ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T_rmp            
               ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !T_rmp*dp_moist
-              call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !T*dp_star_moist
+              if(filtered)then
+                      call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !T*dp_star_moist
+              else
+              call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
+              end if
               elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !T 
           end if
 
@@ -1168,8 +1209,12 @@ contains
 
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_moist  !u_rmp*dp_moist
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_moist  !v_rmp*dp_moist
-          call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
-          !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
+          if(filtered)then
+                call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
+          else
+                call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)  
+          end if
+          !        call remap1_nofilter(ttmp,np,2,dp_star,dp)!
 
           if ( .not. se_prescribed_wind_2d ) &
                 elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)*dp_s_inv    !u
@@ -1181,9 +1226,13 @@ contains
           ! back out T from TE
                 elem(ie)%state%t(:,:,:,np1) = &
                         ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 +&
-                        elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair     !T (E as t is used)
+                        elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair    !T (E as t is used)
+                do k=1,nlev
+                        ttmp(1,1,k,1) = 1-r_universal/cpair*(log(pint2(k+1))-log(pint2(k)))/&
+                                                                        (pint2(k+1)-pint2(k))
+                        elem(ie)%state%t(1,1,k,np1) = (elem(ie)%state%t(1,1,k,np1)-phi(1,1,k,1))/ttmp(1,1,k,1)
+                end do
           end if
-
         !writing remapped T state:
         call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i) 
 
