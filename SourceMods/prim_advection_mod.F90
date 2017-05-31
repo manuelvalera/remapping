@@ -1011,7 +1011,7 @@ contains
     real (kind=r8), dimension(np,np,nlev,2):: ttmp,phi
     real(KIND=r8), dimension(nlev+1) :: pint1,pint2
     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
-    logical          :: remap_te,filtered    
+    logical          :: remap_te,filtered,phi_inc    
     
     ! reference levels:
     !   dp(k) = (hyai(k+1)-hyai(k))*ps0 + (hybi(k+1)-hybi(k))*ps(i,j)
@@ -1048,10 +1048,10 @@ contains
         do k=1,size(t0)
                  
                  dp_star_moist(:,:,k) = pint1(k+1)-pint1(k)
-                 lnp1(k) = log(dp_star_moist(1,1,k))
+                 lnp1(k) = log(pint1(k+1))-log(pint1(k)) !log(dp_star_moist(1,1,k))
                  
                  dp_moist(:,:,k) = pint2(k+1)-pint2(k) 
-                 lnp2(k) = log(dp_moist(1,1,k))
+                 lnp2(k) = log(pint2(k+1))-log(pint2(k)) !log(dp_moist(1,1,k))
                            
                  elem(ie)%state%t(:,:,k,np1) = t0(k)
 
@@ -1108,27 +1108,30 @@ contains
         dp_inv=1.0_R8/dp_moist !for efficiency
       end if                
 
-
-      remap_te = .true.!.true.
       filtered = .false.
+      remap_te = .true.
+      phi_inc  = .true.
 
       if(lhack_vert_rmp) then
         do i=1,99
         ! remap the dynamics i-times:
           if(remap_te)then
                 ! remap u,v and cpair*T + .5 u^2
-                phi(1,1,:,1) = r_universal*elem(ie)%state%t(1,1,:,np1)*lnp2
-                if(masterproc)then
-                        write (filename, '("phi_", I0.3, ".dat")' )  i
-                        open(unitn, file=trim(filename), status='replace' )
-                        do k=1,size(phi(1,1,:,1))
-                                write(unitn,*) phi(1,1,k,1)
-                        end do
-                        close(unitn)
-                endif
                 ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair - phi(:,:,:,1) !Energy 
+                        elem(ie)%state%t(:,:,:,np1)*cpair !Energy 
+                if(phi_inc)then
+                phi(1,1,:,1) = r_universal*elem(ie)%state%t(1,1,:,np1)*lnp2
+                        if(masterproc)then
+                                write (filename, '("phi_", I0.3, ".dat")' )  i
+                                open(unitn, file=trim(filename), status='replace' )
+                                do k=1,size(phi(1,1,:,1))
+                                        write(unitn,*) phi(1,1,k,1)
+                                end do
+                                close(unitn)
+                        endif
+                ttmp(:,:,:,1)=ttmp(:,:,:,1) - phi(:,:,:,1) !Energy  
+                end if
                 ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !E*dp_star_moist
                 if(filtered)then
                         call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
@@ -1169,11 +1172,13 @@ contains
                 elem(ie)%state%t(:,:,:,np1) = &
                 ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
                 elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair  !T_rmp (E_rmp as t is used)
+                if(phi_inc)then
                 do k=1,nlev
                         ttmp(1,1,k,1) = 1 - r_universal/cpair*(log(pint1(k+1))-log(pint1(k)))/&
                                                                         (pint1(k+1)-pint1(k))
                         elem(ie)%state%t(1,1,k,np1) = (elem(ie)%state%t(1,1,k,np1)-phi(1,1,k,1))/ttmp(1,1,k,1) 
                 end do
+                end if
           end if     
 
 !        call write_data(pint2,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i)!
@@ -1183,10 +1188,14 @@ contains
 
           if(remap_te)then
               ! remap u,v and cpair*T + .5 u^2
-              phi(1,1,:,1) = r_universal*elem(ie)%state%t(1,1,:,np1)*lnp1
+     
               ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair - phi(:,:,:,1) !E_rmp
+                        elem(ie)%state%t(:,:,:,np1)*cpair !E_rmp
+              if(phi_inc)then
+              phi(1,1,:,1) = r_universal*elem(ie)%state%t(1,1,:,np1)*lnp1 
+              ttmp(:,:,:,1) = ttmp(:,:,:,1) - phi(:,:,:,1)
+              end if             
               ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !E_rmp*dp_moist                   
               if(filtered)then
                       call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
@@ -1227,11 +1236,13 @@ contains
                 elem(ie)%state%t(:,:,:,np1) = &
                         ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 +&
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair    !T (E as t is used)
-                do k=1,nlev
-                        ttmp(1,1,k,1) = 1-r_universal/cpair*(log(pint2(k+1))-log(pint2(k)))/&
+                if(phi_inc)then
+                        do k=1,nlev
+                                ttmp(1,1,k,1) = 1-r_universal/cpair*(log(pint2(k+1))-log(pint2(k)))/&
                                                                         (pint2(k+1)-pint2(k))
-                        elem(ie)%state%t(1,1,k,np1) = (elem(ie)%state%t(1,1,k,np1)-phi(1,1,k,1))/ttmp(1,1,k,1)
-                end do
+                                elem(ie)%state%t(1,1,k,np1) = (elem(ie)%state%t(1,1,k,np1)-phi(1,1,k,1))/ttmp(1,1,k,1)
+                        end do
+                end if
           end if
         !writing remapped T state:
         call write_data(pint1,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i) 
