@@ -17,7 +17,7 @@ set ylabel "error"
 #set xrange auto
 set format y '%g'
 set key right bottom
-#set logscale y
+set logscale y
 
 plot '/scratch/cluster/mvalera/vrmp/run/dpu_errors.dat' u 1 w lp t "T_cons",\
 '/scratch/cluster/mvalera/vrmp/run/dpu_errors_TE.dat' u 1 w lp t "TE_cons"
@@ -49,7 +49,7 @@ unset multiplot
 
 set output "dpt_error.png"
 set multiplot layout 3, 1 title "{/Symbol D}p*T*C_p error" font ",12";
-
+unset logscale y
 
 set title " {/Symbol F}_{max}"
 #set xlabel "T(K)"
@@ -95,7 +95,7 @@ set ylabel "error"
 #set xrange auto
 set format y '%g'
 set key right bottom
-#set logscale y
+set logscale y
 
 plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors.dat' u 1 w lp t "T_cons",\
 '/scratch/cluster/mvalera/vrmp/run/dpk_errors_TE.dat' u 1 w lp t "TE_cons"
@@ -124,9 +124,9 @@ plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors.dat' u 4 w lp t "T_cons",\
 '/scratch/cluster/mvalera/vrmp/run/dpk_errors_TE.dat' u 4 w lp t "TE_cons"
 
 unset multiplot
-
+unset logscale y
 set output "totals.png"
-set multiplot layout 3, 1 title "Total quantities T" font ",12";
+set multiplot layout 3, 1 title "Norm. Total quantities T_{cons}" font ",12";
 
 set title " {/Symbol D}p*u "
 #set xlabel "T(K)"
@@ -136,7 +136,9 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum.dat' u 1 w lp t "T_cons",\
+stats '/scratch/cluster/mvalera/vrmp/run/dpu_sum.dat' u 1 name "dpu"
+show var dpu
+plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum.dat' u ($1/dpu_max) w lp t "T_cons",\
 
 
 
@@ -148,7 +150,9 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpt_sum.dat' u 1 w lp t "T_cons",\
+stats '/scratch/cluster/mvalera/vrmp/run/dpt_sum.dat' u 1 name "dpt"
+show var dpt
+plot '/scratch/cluster/mvalera/vrmp/run/dpt_sum.dat' u ($1/dpt_max) w lp t "T_cons",\
 
 
 set title "K"
@@ -159,13 +163,15 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum.dat' u 1 w lp t "T_cons",\
+stats '/scratch/cluster/mvalera/vrmp/run/dpk_sum.dat' u 1 name "dpk"
+show var dpk
+plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum.dat' u ($1/dpk_max) w lp t "T_cons",\
 
 
 unset multiplot
 
 set output "totals_TE.png"
-set multiplot layout 3, 1 title "Total quantities TE" font ",12";
+set multiplot layout 3, 1 title "Norm. total quantities TE_{cons}" font ",12";
 
 set title " {/Symbol D}p*u "
 #set xlabel "T(K)"
@@ -175,7 +181,10 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u 1 w lp t "TE_cons"
+
+stats '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u 1 name "dpu_TE"
+show var dpu_TE
+plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
 
 
 set title " {/Symbol D}p*T*C_p"
@@ -186,7 +195,9 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat' u 1 w lp t "TE_cons"
+stats '/scratch/cluster/mvalera/vrmp/run/dpt_sum_TE.dat' u 1 name "dpt_TE"
+show var dpt_TE
+plot '/scratch/cluster/mvalera/vrmp/run/dpt_sum_TE.dat' u ($1/dpt_TE_max) w lp t "TE_cons"
 
 set title "K"
 #set xlabel "T(K)"
@@ -196,7 +207,9 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat' u 1 w lp t "TE_cons"
+stats '/scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat' u 1 name "dpk_TE"
+show var dpk_TE
+plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat' u ($1/dpk_TE_max) w lp t "TE_cons"
 
 unset multiplot
 

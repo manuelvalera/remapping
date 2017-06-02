@@ -497,7 +497,7 @@ contains
         read(unitn,*) dpk_0                         !read state 0    
         close(unitn)
       
-        l_inf = MAXVAL(ABS(dpk(1,1,:,1) - dpk_0)) / MAXVAL(ABS(dpk_0))
+        l_inf = MAXVAL(ABS(dpk(1,1,:,1) - dpk_0))  / MAXVAL(ABS(dpk_0))
 
         !dpk_l_2:
 
