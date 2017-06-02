@@ -262,12 +262,14 @@ contains
     end if
   end subroutine write_data
 
-  subroutine diagnostic(dpu,dpt,dpk,filenum)
+  subroutine diagnostic(dpu,dpt,dpk,dpphi,filenum)
     use spmd_utils,       only: masterproc
     integer           :: unitn,k,sz,dpk_k
     integer,intent(in):: filenum
     character(len=256):: filename
     real(KIND=r8), dimension(np,np,nlev,1),intent(in)::dpu,dpk,dpt
+    real(KIND=r8), intent(in)     :: dpphi
+    real(KIND=r8)                 :: dpphi_0
     real(KIND=r8)      :: delta_phi_0,m_0,phi_max,phi_min,l_inf,l_2,I_n,I_d,end_val
     real(KIND=r8),dimension(nlev)  :: dpu_0,dpt_0,dpk_0
     real(KIND=r8),  parameter :: PI=4*atan(1.0)
@@ -522,11 +524,62 @@ contains
       
       end if
 
+      !dpphi - gotta do it separately...
+      if(filenum==1)then
 
+        !dpphi_l_inf, dpphi_l_2:
+        write (filename, '("dpphi_l_inf_0.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) dpphi
+        close(unitn)
+
+        write (filename, '("dpphi_errors.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        close(unitn)
+
+        write (filename, '("dpphi_sum.dat")' )
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) dpphi
+        close(unitn)
+
+      else if(filenum>1)then
+        !dpphi_l_inf:
+        filename = "dpphi_l_inf_0.dat"
+        open(unitn, file=trim(filename),status='old')
+        read(unitn,*) dpphi_0                         !read state 0    
+        close(unitn)
+
+        if(dpphi_0/=0)then
+                l_inf = ABS(dpphi - dpphi_0) / ABS(dpphi_0)
+        else
+                l_inf = 0.0d0
+        end if
+        !dpphi_l_2:
+
+        I_n = ((dpphi-dpphi_0)**2)/(2*PI)
+        I_d = (dpphi_0**2)/(2*PI)
+
+        if(I_d/=0)then
+                l_2 = SQRT( I_n / I_d )
+        else
+                l_2 = 0.0d0
+        end if
+
+        write (filename, '("dpphi_errors.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) 0,0,l_inf,l_2
+        close(unitn)
+
+        write (filename, '("dpphi_sum.dat")' )
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) dpphi
+        close(unitn)
+
+       
+       end if      
       
     end if
-  end subroutine diagnostic
-
+  end subroutine diagnostic  
 
   subroutine trapezoid_integration(array,end_val,integral)
   !Routine for numerical integration of an array using trapezoid rule,

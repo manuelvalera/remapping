@@ -8,19 +8,19 @@
 
 set terminal pngcairo enhanced font 'Verdana,10'
 set output "dpu_error.png"
-set multiplot layout 3, 1 title "{/Symbol D}p*u error" font ",12";
+set multiplot layout 2, 1 title "{/Symbol D}p*u error" font ",12";
 
 
-set title " {/Symbol F}_{max}"
+#set title " {/Symbol F}_{max}"
 #set xlabel "T(K)"
-set ylabel "error"
+#set ylabel "error"
 #set xrange auto
-set format y '%g'
-set key right bottom
-set logscale y
+#set format y '%g'
+#set key right bottom
+#set logscale y
 
-plot '/scratch/cluster/mvalera/vrmp/run/dpu_errors.dat' u 1 w lp t "T_cons",\
-'/scratch/cluster/mvalera/vrmp/run/dpu_errors_TE.dat' u 1 w lp t "TE_cons"
+#plot '/scratch/cluster/mvalera/vrmp/run/dpu_errors.dat' u 1 w lp t "T_cons",\
+#'/scratch/cluster/mvalera/vrmp/run/dpu_errors_TE.dat' u 1 w lp t "TE_cons"
 
 set title " l_{inf}"
 #set xlabel "T(K)"
@@ -125,6 +125,34 @@ plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors.dat' u 4 w lp t "T_cons",\
 
 unset multiplot
 unset logscale y
+
+# -------- D(p*phi) Error ----------------
+
+set output "dpphi_error.png"
+set multiplot layout 2, 1 title "Geopotential error" font ",12";
+
+set title " l_{inf}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpphi_errors_TE.dat' u 3 w lp t "TE_cons"
+
+set title " l_{2}"
+#set xlabel "T(K)"
+set ylabel "error"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+plot '/scratch/cluster/mvalera/vrmp/run/dpk_errors_TE.dat' u 4 w lp t "TE_cons"
+
+unset multiplot
+
 set output "totals.png"
 set multiplot layout 3, 1 title "Norm. Total quantities T_{cons}" font ",12";
 
@@ -167,24 +195,24 @@ stats '/scratch/cluster/mvalera/vrmp/run/dpk_sum.dat' u 1 name "dpk"
 show var dpk
 plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum.dat' u ($1/dpk_max) w lp t "T_cons",\
 
-
 unset multiplot
 
 set output "totals_TE.png"
-set multiplot layout 3, 1 title "Norm. total quantities TE_{cons}" font ",12";
+set term pngcairo size 600,900 
+set multiplot layout 4, 1 title "Norm. total quantities TE_{cons} - No Filter" font ",12";
 
-set title " {/Symbol D}p*u "
+#set title " {/Symbol D}p*u "
 #set xlabel "T(K)"
-set ylabel "Total sum"
+#set ylabel "Total sum"
 #set xrange auto
-set format y '%g'
-set key right bottom
+#set format y '%g'
+#set key right bottom
 #set logscale y
 
 
-stats '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u 1 name "dpu_TE"
-show var dpu_TE
-plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
+#stats '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u 1 name "dpu_TE"
+#show var dpu_TE
+#plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum_TE.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
 
 
 set title " {/Symbol D}p*T*C_p"
@@ -210,6 +238,31 @@ set key right bottom
 stats '/scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat' u 1 name "dpk_TE"
 show var dpk_TE
 plot '/scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat' u ($1/dpk_TE_max) w lp t "TE_cons"
+
+set title " {/Symbol D}(p {/Symbol F})"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/dpphi_sum_TE.dat' u 1 name "dpphi_TE"
+show var dpphi_TE
+plot '/scratch/cluster/mvalera/vrmp/run/dpphi_sum_TE.dat' u ($1/dpphi_TE_max) w lp t "TE_cons"
+
+set title "TE"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '< paste /scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat /scratch/cluster/mvalera/vrmp/run/dpt_sum_TE.dat /scratch/cluster/mvalera/vrmp/run/dpphi_sum_TE.dat' u ($1+$2+$3) name "TE"
+show var TE
+plot '< paste /scratch/cluster/mvalera/vrmp/run/dpk_sum_TE.dat /scratch/cluster/mvalera/vrmp/run/dpt_sum_TE.dat /scratch/cluster/mvalera/vrmp/run/dpphi_sum_TE.dat' u (($1+$2+$3)/TE_max) w lp t "TE_cons"
+
 
 unset multiplot
 
