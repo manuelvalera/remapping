@@ -984,7 +984,7 @@ contains
     !
     
     use hybvcoord_mod, only          : hvcoord_t
-    use vertremap_mod,          only : remap1, remap1_nofilter
+    use vertremap_mod,          only : remap1, remap1_nofilter,remap_Q_ppm
     use hybrid_mod            , only : hybrid_t!, set_region_num_threads
     use fvm_control_volume_mod, only : fvm_struct
     use control_mod,            only : se_prescribed_wind_2d
@@ -992,7 +992,7 @@ contains
     use dimensions_mod        , only : qsize_condensate_loading, qsize_condensate_loading_idx
     use hack_vert_rmp         , only : get_levels,overwrite_state,write_data,diagnostic,lhack_vert_rmp
     use spmd_utils            , only: masterproc
-    use physconst,              only: r_universal
+    !use physconst,              only: r_universal
 
 
     type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
@@ -1008,11 +1008,12 @@ contains
     integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
     character(len=256):: filename
     real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry,dp_s_inv
-    real (kind=r8), dimension(np,np,nlev,2):: ttmp,phi
+    real (kind=r8), dimension(np,np,nlev,2):: ttmp
+    real (kind=r8), dimension(np,np,nlev+1):: phi
     real(KIND=r8), dimension(nlev+1) :: pint1,pint2
     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
-    logical          :: remap_te,filtered,phi_inc    
-    !real(KIND=r8) :: r_universal
+    logical          :: remap_te,filtered,phi_inc,ppm    
+    real(KIND=r8) :: r_universal
     real(KIND=r8) :: dpphi
     
     ! reference levels:
@@ -1047,7 +1048,7 @@ contains
         ttmp = 0._r8
         phi = 0._r8
         dpphi = 0._r8
-        !r_universal = 1.38065e-23*6.02214e26/28.966
+        r_universal = 1.38065e-23*6.02214e26/28.966
 
         do k=1,size(t0)
                  
@@ -1112,53 +1113,56 @@ contains
         dp_inv=1.0_R8/dp_moist !for efficiency
       end if                
 
+     
       filtered = .false.   !using remap1() instead of remap1_nofilter()
+      ppm = .true.        !finding out if ppm is different than remap() (no?)
       remap_te = .true.   !using Total Energy remapping instead of Temperature
       phi_inc  = .true.   !using Geopotential term inside TE
 
       if(lhack_vert_rmp) then
-        do i=1,99
+        do i=1,99!9
         ! remap the dynamics i-times:
           if(remap_te)then
                 ! remap u,v and cpair*T + .5 u^2
                 ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair !Energy 
-                if(phi_inc)then
-                        do k=nlev,1,-1
-                                if(k==nlev)then
-                                  phi(:,:,k,1) = r_universal*elem(ie)%state%t(:,:,k,np1)*lnp1(k) 
-                                  dpphi = pint1(k)*phi(1,1,k,1) !save p*phi(top)
-                                  ttmp(:,:,k,1)= ttmp(:,:,k,1) - (pint1(k)*phi(:,:,k,1))/dp_star_moist(:,:,k) !Energy
-                                else
-                                  phi(:,:,k,1) = phi(:,:,k+1,1)+&
-                                        r_universal*elem(ie)%state%t(:,:,k,np1)*lnp1(k)
-                                  ttmp(:,:,k,1)= ttmp(:,:,k,1) + ( pint1(k+1)*phi(:,:,k+1,1)-&
-                                        pint1(k)*phi(:,:,k,1))/dp_star_moist(:,:,k) !Energy  
-                                end if 
+                        elem(ie)%state%t(:,:,:,np1)*cpair !Energy minus phi term
+                if(phi_inc)then                                                
+                        do k=nlev,1,-1    
+                           phi(:,:,k) = phi(:,:,k+1)+&
+                                        r_universal*elem(ie)%state%t(:,:,k,np1)*&
+                                        (log(pint1(k+1))-log(pint1(k)))                 
+                           if(k==nlev)then
+                                dpphi = pint1(k)*phi(1,1,k) !saving p*phi(surface)
+                           end if 
+                           ttmp(:,:,k,1)= ttmp(:,:,k,1) + ( pint1(k+1)*phi(:,:,k+1) - &
+                                        pint1(k)*phi(:,:,k) )/dp_star_moist(:,:,k) !Energy  
                         end do
 
-                        dpphi = dpphi - pint1(1)*phi(1,1,1,1) !(k==1) p*phi(top) - p*phi(bot)
+                        dpphi = pint1(1)*phi(1,1,1) - dpphi !(k==1==top) p*phi(top) - p*phi(surface)
 
-                        !TODO: print total energy at this point (0)
+                        if(masterproc)then
+                          if(i==1)then
+                                write (filename, '("phi_TE.dat")' )  
+                                open(unitn, file=trim(filename), status='replace' )
+                                write(unitn,*) dpphi,SUM(ttmp(1,1,:,1)),cpair
+                                close(unitn)
+                          else 
+                                write (filename, '("phi_TE.dat")' )  
+                                open(unitn,file=trim(filename),status='old',position='append' )
+                                write(unitn,*) dpphi,SUM(ttmp(1,1,:,1))
+                                close(unitn)
+                          end if
+                        endif
 
-                        !if(masterproc)then
-                        !        write (filename, '("phi_", I0.3, ".dat")' )  i
-                        !        open(unitn, file=trim(filename), status='replace' )
-                        !        do k=1,size(phi(1,1,:,1))
-                        !                write(unitn,*) phi(1,1,k,1),ttmp(1,1,k,1)
-                        !        end do
-                        !        close(unitn)
-                        !endif
-
-                end if
-
-                
+                end if            
 
                 ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !E*dp_star_moist 
 
                 if(filtered)then
                         call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
+                elseif(ppm)then
+                        call remap_Q_ppm(ttmp,np,1,1,1,dp_star_moist,dp_moist)
                 else
                         call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
                 end if
@@ -1178,6 +1182,8 @@ contains
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v*dp_star_moist
           if(filtered)then
                   call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
+          else if(ppm)then
+                  call remap_Q_ppm(ttmp,np,1,2,2,dp_star_moist,dp_moist)       
           else
                   call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
           end if
@@ -1191,21 +1197,16 @@ contains
           if(remap_te)then
                 ! back out T from TE
                 if(phi_inc)then
-                        do k=nlev,1,-1
-                           if(k==nlev)then
-                             elem(ie)%state%t(:,:,k,np1) = ( elem(ie)%state%t(:,:,k,np1) - &
+                   do k=nlev,1,-1
+                      elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
                                 ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
-                                elem(ie)%state%v(:,:,2,k,np1)**2)/2))/(cpair-(pint2(k)*&
-                                r_universal*lnp2(k))/dp_moist(:,:,k)) !T_rmp
-                             phi(:,:,k,1) = r_universal*elem(ie)%state%t(:,:,k,np1)*lnp2(k) !phi_rmp
-                           else
-                             elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
-                                ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
-                                elem(ie)%state%v(:,:,2,k,np1)**2)/2) - phi(:,:,k+1,1))/(cpair-(pint2(k)*&
-                                r_universal*lnp2(k))/dp_moist(:,:,k)) !T_rmp
-                             phi(:,:,k,1) = phi(:,:,k+1,1)+r_universal*elem(ie)%state%t(:,:,k,np1)*lnp2(k) !phi_rmp
-                           end if
-                        end do
+                                elem(ie)%state%v(:,:,2,k,np1)**2)/2) - phi(:,:,k+1))/(cpair-(pint2(k)*&
+                                r_universal*(log(pint2(k+1))-log(pint2(k))))/dp_moist(:,:,k))
+!(pint2(k+1)-pint2(k))                                !T_rmp
+                      phi(:,:,k) = phi(:,:,k+1)+r_universal*elem(ie)%state%t(:,:,k,np1)*&
+                                (log(pint2(k+1))-log(pint2(k))) !phi_rmp
+
+                   end do
                 else
                         elem(ie)%state%t(:,:,:,np1) = &
                         ( elem(ie)%state%t(:,:,:,np1) - ((elem(ie)%state%v(:,:,1,:,np1)**2 + &
@@ -1223,25 +1224,24 @@ contains
      
               ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
-                        elem(ie)%state%t(:,:,:,np1)*cpair !E_rmp
+                        elem(ie)%state%t(:,:,:,np1)*cpair !E_rmp (CpT+K)
               if(phi_inc)then
-                        do k=nlev,1,-1
-                                if(k==nlev)then 
-                                  phi(:,:,k,1) = r_universal*elem(ie)%state%t(:,:,k,np1)*lnp2(k)
-                                  ttmp(:,:,k,1)= ttmp(:,:,k,1) - (pint2(k)*phi(:,:,k,1))/dp_moist(:,:,k) !E_rmp
-                                else
-                                  phi(:,:,k,1) = phi(:,:,k+1,1)+&
-                                     r_universal*elem(ie)%state%t(:,:,k,np1)*lnp2(k)
-                                  ttmp(:,:,k,1)= ttmp(:,:,k,1) + (pint2(k+1)*phi(:,:,k+1,1)-&
-                                                 pint2(k)*phi(:,:,k,1))/dp_moist(:,:,k) !E_rmp  
-                                end if 
-                        end do
+                 do k=nlev,1,-1
+                   phi(:,:,k) = phi(:,:,k+1)+&
+                                  r_universal*elem(ie)%state%t(:,:,k,np1)*(log(pint2(k+1))-log(pint2(k)))
+                   ttmp(:,:,k,1)= ttmp(:,:,k,1) + (pint2(k+1)*phi(:,:,k+1)-&
+                                  pint2(k)*phi(:,:,k))/dp_moist(:,:,k) !E_rmp (CpT+K+phi)  
+
+                 end do
               end if
           
               ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !E_rmp*dp_moist                   
 
               if(filtered)then
                       call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
+
+              else if(ppm)then
+                      call remap_Q_ppm(ttmp,np,1,1,1,dp_moist,dp_star_moist) 
               else
                       call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
               end if
@@ -1261,6 +1261,8 @@ contains
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_moist  !v_rmp*dp_moist
           if(filtered)then
                 call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
+          else if(ppm)then
+                call remap_Q_ppm(ttmp,np,1,2,2,dp_moist,dp_star_moist)
           else
                 call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)  
           end if
@@ -1275,21 +1277,17 @@ contains
           if(remap_te)then
           ! back out T from TE
                 if(phi_inc)then
-                        do k=nlev,1,-1
-                           if(k==nlev)then
-                             elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
-                                ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
-                                elem(ie)%state%v(:,:,2,k,np1)**2)/2))/(cpair-(pint1(k)*&
-                                r_universal*lnp1(k))/dp_star_moist(:,:,k)) !T
-                             phi(:,:,k,1) = r_universal*elem(ie)%state%t(:,:,k,np1)*lnp1(k) !phi
-                           else
-                             elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
-                                ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
-                                elem(ie)%state%v(:,:,2,k,np1)**2)/2) - phi(:,:,k+1,1))/(cpair-(pint1(k)*&
-                                r_universal*lnp1(k))/dp_star_moist(:,:,k)) !T
-                             phi(:,:,k,1) = phi(:,:,k+1,1)+r_universal*elem(ie)%state%t(:,:,k,np1)*lnp1(k) !phi
-                           end if
-                        end do
+                   do k=nlev,1,-1
+                      elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
+                                                    ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
+                                elem(ie)%state%v(:,:,2,k,np1)**2)/2) - phi(:,:,k+1))/(cpair-(pint1(k)*&
+                                r_universal*(log(pint1(k+1))-log(pint1(k))))/dp_star_moist(:,:,k))
+!(pint1(k+1)-pint1(k))             !T
+                             
+                      phi(:,:,k) = phi(:,:,k+1)+r_universal*elem(ie)%state%t(:,:,k,np1)*&
+                                            (log(pint1(k+1))-log(pint1(k))) !phi
+
+                   end do
                 else
                 elem(ie)%state%t(:,:,:,np1) = &
                         ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 +&

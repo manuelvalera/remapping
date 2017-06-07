@@ -391,7 +391,11 @@ contains
         read(unitn,*) delta_phi_0, m_0              !read state 0
         close(unitn)
 
-        phi_max = (MAXVAL(dpu(1,1,:,1)) - m_0) / delta_phi_0  
+        if (delta_phi_0/=0) then
+                phi_max = (MAXVAL(dpu(1,1,:,1)) - m_0) / delta_phi_0  
+        else    
+                phi_max = 1.0d0
+        endif
 
         !dpu_phi_min:
         filename = "dpu_phi_min_0.dat"
@@ -399,7 +403,11 @@ contains
         read(unitn,*) delta_phi_0, m_0              !read state 0
         close(unitn)
        
-        phi_min = (MINVAL(dpu(1,1,:,1)) - m_0) / delta_phi_0
+        if (delta_phi_0/=0) then
+                phi_min = (MINVAL(dpu(1,1,:,1)) - m_0) / delta_phi_0
+        else
+                phi_min = 1.0d0
+        end if
 
         !dpu_l_inf:
         filename = "dpu_l_inf_0.dat"
@@ -407,8 +415,12 @@ contains
         read(unitn,*) dpu_0                         !read state 0    
         close(unitn)
 
-        l_inf = MAXVAL(ABS(dpu(1,1,:,1) - dpu_0)) / MAXVAL(ABS(dpu_0))
-        
+        if (sum(dpu_0(:))/=0) then
+                l_inf = MAXVAL(ABS(dpu(1,1,:,1) - dpu_0)) / MAXVAL(ABS(dpu_0))
+        else 
+                l_inf = 1.0d0  
+        end if      
+
         !dpu_l_2:
 
         call trapezoid_integration((dpu(1,1,:,1)-dpu_0)**2,end_val,I_n) 
@@ -417,7 +429,11 @@ contains
         I_n = I_n/(4*PI)
         I_d = I_d/(4*PI)
 
-        l_2 = SQRT( I_n / I_d )
+        if(I_d/=0)then
+                l_2 = SQRT( I_n / I_d )
+        else
+                l_2 = 1.0d0
+        end if
 
         write (filename, '("dpu_errors.dat")' )
         open(unitn, file=trim(filename), status='old',position='append')
@@ -482,24 +498,37 @@ contains
         open(unitn, file=trim(filename),status='old')
         read(unitn,*) delta_phi_0, m_0              !read state 0
         close(unitn)
-      
-        phi_max = (MAXVAL(dpk(1,1,:,1)) - m_0) / delta_phi_0
+
+        if(delta_phi_0/=0)then      
+                phi_max = (MAXVAL(dpk(1,1,:,1)) - m_0) / delta_phi_0
+        else
+                phi_max = 1.0d0
+        end if
     
         !dpk_phi_min:
         filename = "dpk_phi_min_0.dat"
         open(unitn, file=trim(filename),status='old')
         read(unitn,*) delta_phi_0, m_0              !read state 0
         close(unitn)  
-    
-        phi_min = (MINVAL(dpk(1,1,:,1)) - m_0) / delta_phi_0
+   
+        if (delta_phi_0/=0) then 
+                phi_min = (MINVAL(dpk(1,1,:,1)) - m_0) / delta_phi_0
+        else
+                phi_min = 1.0d0
+        end if
 
         !dpk_l_inf:
         filename = "dpk_l_inf_0.dat"
         open(unitn, file=trim(filename),status='old')
         read(unitn,*) dpk_0                         !read state 0    
         close(unitn)
-      
-        l_inf = MAXVAL(ABS(dpk(1,1,:,1) - dpk_0))  / MAXVAL(ABS(dpk_0))
+
+        if (sum(dpk_0(:))/=0) then      
+                l_inf = MAXVAL(ABS(dpk(1,1,:,1) - dpk_0))  / MAXVAL(ABS(dpk_0))
+        else
+                l_inf = 1.0d0
+        end if
+        
 
         !dpk_l_2:
 
@@ -509,7 +538,11 @@ contains
         I_n = I_n/(4*PI)
         I_d = I_d/(4*PI)
 
-        l_2 = SQRT( I_n / I_d )
+        if(I_d/=0)then
+                l_2 = SQRT( I_n / I_d )
+        else
+                l_2 = 1.0d0
+        end if
       
         write (filename, '("dpk_errors.dat")' )
         open(unitn, file=trim(filename), status='old',position='append')

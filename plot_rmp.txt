@@ -6,7 +6,7 @@ do for [t=1:99] {
 
 set terminal pngcairo enhanced font 'Verdana,10'
 if (t<10){ set output "vert_prof_T_0".t.".png" } else { set output "vert_prof_T_".t.".png" }
-#set title "Temperature vertical remap - no TE"
+set title "Temperature vertical remap - no filter"
 set multiplot layout 1, 2 ;
 
 set title "Vertical remap"
@@ -15,17 +15,17 @@ set ylabel "P(hPa)"
 #set xrange auto
 set format y '%g'
 set key right bottom
-set logscale y
+#set logscale y
 
 if (t<10){
 plot "/scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat" u 2:1 w lp t "t=0",\
 "/scratch/cluster/mvalera/vrmp/run/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "blue" t "T_{cons} t=".t,\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
 
 }else{
 plot "/scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat" u 2:1 w lp t "t=0",\
 "/scratch/cluster/mvalera/vrmp/run/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "blue" t "T_{cons} t=".t,\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "black"  t "TE_{cons} t=".t
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "black"  t "TE_{cons} t=".t
 }
 
 
@@ -35,14 +35,14 @@ set ylabel "P(hPa)"
 set format y '%g'
 #set xrange [-20:10]
 set key right bottom
-set logscale y
+#set logscale y
 
 if (t<10){
 plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
-'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
 }else{
-plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "Teps",\
-'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
+'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
 }
 
 unset multiplot
@@ -55,16 +55,16 @@ set xlabel "u(m/s)"
 set ylabel "P(hPa)"
 set format y '%g'
 set key right bottom
-set logscale y
+#set logscale y
 
 if (t<10){
 plot "/scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat" u 2:1 w lp t "t=0",\
 "/scratch/cluster/mvalera/vrmp/run/p_k_u_00".t.".dat" u 2:1 w lp linecolor rgb "blue" t "T_{cons} t=".t,\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_u_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_u_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
 }else{
 plot "/scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat" u 2:1 w lp t "t=0",\
 "/scratch/cluster/mvalera/vrmp/run/p_k_u_0".t.".dat" u 2:1 w lp linecolor rgb "blue" t "T_{cons} t=".t,\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_u_0".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_u_0".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
 }
 
 set title "Aberration"
@@ -72,20 +72,20 @@ set xlabel "{/Symbol D}u(m/s)"
 set ylabel "P(hPa)"
 set format y '%g'
 set key right bottom
-set logscale y
+#set logscale y
 
 if (t<10){
 plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_u_00'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
-'< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_u_00'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+'< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_u_00'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
 }else{
 plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_u_0'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
-'< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_filtered/p_k_u_0'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+'< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_u_0'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
 }
 
 unset multiplot
 }
-#'convert -delay 20 -loop 0 *u*.png vrmp_u_TEcons_phi_filtered.gif'
-#'convert -delay 20 -loop 0 *T*.png vrmp_T_TEcons_phi_filtered.gif'
+#'convert -delay 20 -loop 0 *u*.png vrmp_u_TEcons_phi_nofilter.gif'
+#'convert -delay 20 -loop 0 *T*.png vrmp_T_TEcons_phi_nofilter.gif'
 #'rm -rf vert*.png'
 
 
