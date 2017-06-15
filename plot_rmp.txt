@@ -12,10 +12,11 @@ set multiplot layout 1, 2 ;
 set title "Vertical remap"
 set xlabel "T(K)"
 set ylabel "P(hPa)"
-#set xrange auto
+set yrange [1:900]
+#set xrange [-100:100]
 set format y '%g'
 set key right bottom
-#set logscale y
+set logscale y
 
 if (t<10){
 plot "/scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat" u 2:1 w lp t "t=0",\
@@ -33,9 +34,9 @@ set title "Aberration"
 set xlabel "{/Symbol D}T(K)"
 set ylabel "P(hPa)"
 set format y '%g'
-#set xrange [-20:10]
+#set xrange auto
 set key right bottom
-#set logscale y
+set logscale y
 
 if (t<10){
 plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
@@ -47,6 +48,45 @@ plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/m
 
 unset multiplot
 
+if (t<10){ set output "vert_prof_TE_0".t.".png" } else { set output "vert_prof_TE_".t.".png" }
+set title "Total Energy vertical remap - no filter"
+set multiplot layout 1, 2 ;
+
+set title "Vertical remap"
+set xlabel "TE"
+set ylabel "P(hPa)"
+#set xrange auto
+set format y '%g'
+set key right bottom
+set logscale y
+
+if (t<10){
+plot "/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_001.dat" u 2:1 w lp t "t=0",\
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
+
+}else{
+plot "/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_001.dat" u 2:1 w lp t "t=0",\
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_0".t.".dat" u 2:1 w lp linecolor rgb "black"  t "TE_{cons} t=".t
+}
+
+
+set title "Aberration"
+set xlabel "{/Symbol D}TE"
+set ylabel "P(hPa)"
+set format y '%g'
+#set xrange [-20:10]
+set key right bottom
+set logscale y
+
+if (t<10){
+plot '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_001.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_00'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+}else{
+plot '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_001.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_TE_0'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+}
+
+unset multiplot
+
+
 if (t<10){ set output "vert_prof_u_0".t.".png" } else { set output "vert_prof_u_".t.".png" }
 set multiplot layout 1, 2 ;
 
@@ -55,7 +95,7 @@ set xlabel "u(m/s)"
 set ylabel "P(hPa)"
 set format y '%g'
 set key right bottom
-#set logscale y
+set logscale y
 
 if (t<10){
 plot "/scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat" u 2:1 w lp t "t=0",\
@@ -72,7 +112,7 @@ set xlabel "{/Symbol D}u(m/s)"
 set ylabel "P(hPa)"
 set format y '%g'
 set key right bottom
-#set logscale y
+set logscale y
 
 if (t<10){
 plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_u_00'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\

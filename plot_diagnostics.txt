@@ -169,7 +169,7 @@ show var dpu
 if(dpu_max==0){
 plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum.dat' u ($1) w lp t "T_cons",\
 }else{
-plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum.dat' u ($1/dpu_max) w lp t "T_cons",\
+plot '/scratch/cluster/mvalera/vrmp/run/dpu_sum.dat' u ($1) w lp t "T_cons",\
 }
 
 
@@ -219,8 +219,11 @@ set key right bottom
 
 stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum.dat' u 1 name "dpu_TE"
 show var dpu_TE
-plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
-
+if(dpu_TE_max==0){
+#plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum.dat' u ($1) w lp t "TE_cons"
+}else{
+#plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
+}
 
 set title " {/Symbol D}p*T*C_p"
 #set xlabel "T(K)"
@@ -277,10 +280,97 @@ plot '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum.dat /scr
 
 unset multiplot
 
-set output "totals_TE_debug.png"
-set term pngcairo size 300,500
-set multiplot layout 2, 1 title " TE_{cons} - No Filter" font ",12";
+set output "sanity_TE_phi.png"
+set term pngcairo size 300,900
+set multiplot layout 3, 1 title " TE_{cons} - No Filter" font ",12";
 
+
+set title " {/Symbol D}(p_{top} {/Symbol F}_{top}) - Lagrangian"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE_lag.dat' u 1 name "dpphi_TE"
+show var dpphi_TE
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE_lag.dat' u ($1/dpphi_TE_max) w lp t "dpphi_top"
+
+set title "TE - Lagrangian"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE_lag.dat' u 2 name "TE"
+show var TE
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE_lag.dat' u ($2/TE_max) w lp t "sum(TEdp)"
+
+set title "TE - Eulerian"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/TE_eul.dat' u 1 name "TE"
+show var TE
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/TE_eul.dat' u ($1/TE_max) w lp t "sum(TEdp)"
+
+unset multiplot
+
+set output "eul_totals_TE.png"
+set term pngcairo size 600,1200
+set multiplot layout 5, 1 title "Norm. total quantities TE_{cons} - Eulerian" font ",12";
+
+set title " {/Symbol D}p*u "
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u 1 name "dpu_TE"
+show var dpu_TE
+if(dpu_TE_max==0){
+#plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u ($1) w lp t "TE_cons"
+}else{
+#plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
+}
+
+set title " {/Symbol D}p*T*C_p"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpt_sum_eul.dat' u 1 name "dpt_TE"
+show var dpt_TE
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpt_sum_eul.dat' u ($1/dpt_TE_max) w lp t "TE_cons"
+
+set title "K"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat' u 1 name "dpk_TE"
+show var dpk_TE
+if(dpk_TE_max==0){
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat' u ($1) w lp t "TE_cons"
+}else{
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat' u ($1/dpk_TE_max) w lp t "TE_cons"
+}
 
 set title " {/Symbol D}(p {/Symbol F})"
 #set xlabel "T(K)"
@@ -290,9 +380,9 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE.dat' u 1 name "dpphi_TE"
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpphi_sum_eul.dat' u 1 name "dpphi_TE"
 show var dpphi_TE
-plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE.dat' u ($1/dpphi_TE_max) w lp t "TE_cons"
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpphi_sum_eul.dat' u ($1/dpphi_TE_max) w lp t "TE_cons"
 
 set title "TE"
 #set xlabel "T(K)"
@@ -302,9 +392,11 @@ set format y '%g'
 set key right bottom
 #set logscale y
 
-stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE.dat' u 2 name "TE"
+stats '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpt_sum_eul.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpphi_sum_eul.dat' u (+$1+$2+$3) name "TE"
 show var TE
-plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/phi_TE.dat' u ($2/TE_max) w lp t "TE_cons"
+plot '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpt_sum_eul.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpphi_sum_eul.dat' u ((+$1+$2+$3)/TE_max) w lp t "TE_cons"
 
 
 unset multiplot
+
+
