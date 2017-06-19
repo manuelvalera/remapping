@@ -19,14 +19,14 @@ set key right bottom
 set logscale y
 
 if (t<10){
-plot "/scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat" u 2:1 w lp t "t=0",\
-"/scratch/cluster/mvalera/vrmp/run/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "blue" t "T_{cons} t=".t,\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "TE_{cons} t=".t
+plot "/scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat" u 2:1 w lp t "t=0",\
+"/scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "blue" t "mirrored t=".t,\
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00".t.".dat" u 2:1 w lp linecolor rgb "black" t "extrapol. t=".t
 
 }else{
-plot "/scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat" u 2:1 w lp t "t=0",\
-"/scratch/cluster/mvalera/vrmp/run/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "blue" t "T_{cons} t=".t,\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "black"  t "TE_{cons} t=".t
+plot "/scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat" u 2:1 w lp t "t=0",\
+"/scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "blue" t "mirrored t=".t,\
+"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0".t.".dat" u 2:1 w lp linecolor rgb "black"  t "extrapol. t=".t
 }
 
 
@@ -39,11 +39,11 @@ set key right bottom
 set logscale y
 
 if (t<10){
-plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
-'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+plot '< paste /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "mirrored",\
+'< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "extrapol."
 }else{
-plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "T_{cons}",\
-'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "TE_{cons}"
+plot '< paste /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "mirrored",\
+'< paste /scratch/cluster/mvalera/vrmp/run/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "extrapol."
 }
 
 unset multiplot

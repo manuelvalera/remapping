@@ -327,22 +327,22 @@ set output "eul_totals_TE.png"
 set term pngcairo size 600,1200
 set multiplot layout 5, 1 title "Norm. total quantities TE_{cons} - Eulerian" font ",12";
 
-set title " {/Symbol D}p*u "
+#set title " {/Symbol D}p*u "
 #set xlabel "T(K)"
-set ylabel "Total sum"
+#set ylabel "Total sum"
 #set xrange auto
-set format y '%g'
-set key right bottom
+#set format y '%g'
+#set key right bottom
 #set logscale y
 
 
-stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u 1 name "dpu_TE"
-show var dpu_TE
-if(dpu_TE_max==0){
+#stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u 1 name "dpu_TE"
+#show var dpu_TE
+#if(dpu_TE_max==0){
 #plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u ($1) w lp t "TE_cons"
-}else{
+#}else{
 #plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpu_sum_eul.dat' u ($1/dpu_TE_max) w lp t "TE_cons"
-}
+#}
 
 set title " {/Symbol D}p*T*C_p"
 #set xlabel "T(K)"
@@ -396,6 +396,17 @@ stats '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat
 show var TE
 plot '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpk_sum_eul.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpt_sum_eul.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/dpphi_sum_eul.dat' u ((+$1+$2+$3)/TE_max) w lp t "TE_cons"
 
+set title "TE -alt"
+#set xlabel "T(K)"
+set ylabel "Total sum"
+#set xrange auto
+set format y '%g'
+set key right bottom
+#set logscale y
+
+stats '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/n_gamma_eul.dat' u 1 name "TE_alt"
+show var TE
+plot '/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/n_gamma_eul.dat' u ($1)/TE_alt_max w lp t "TE_cons"
 
 unset multiplot
 

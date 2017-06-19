@@ -10,7 +10,7 @@ module hack_vert_rmp
   public :: get_levels
   public :: overwrite_state
   public :: write_data
-  public :: write_data_TE!,write_data_TE_eul
+  public :: write_data_TE,write_data_TE_eul,TE_probe
   public :: diagnostic,diagnostic_eul
   public :: trapezoid_integration
 
@@ -286,7 +286,7 @@ contains
       open(unitn, file=trim(filename), status='replace' )
       do k=1,size(pint1)-1
              p_k(k) = (1/2.)*(pint1(k+1)+pint1(k))
-             write(unitn,*) p_k(k),ttmp(k)
+             write(unitn,*) p_k(k),ttmp(k),sum(ttmp(:))
       end do
       close(unitn)
 
@@ -414,9 +414,11 @@ contains
         write(unitn,*) SUM(dpk(1,1,:,1))
         close(unitn)
 
+      !dpk + dpt + dpphi
+
         write (filename, '("gamma_eul.dat")' )
         open(unitn, file=trim(filename), status='replace')
-        write(unitn,*) SUM(dpt(1,1,:,1)) + SUM(dpk(1,1,:,1)) + dpphi
+        write(unitn,*) SUM(dpt(1,1,:,1)) + SUM(dpk(1,1,:,1)) + dpphi,SUM(dpt(1,1,:,1)),SUM(dpk(1,1,:,1)),dpphi
         close(unitn)
 
 
@@ -591,10 +593,12 @@ contains
         open(unitn, file=trim(filename), status='old',position='append')
         write(unitn,*) SUM(dpk(1,1,:,1))
         close(unitn)
+     
 
+      !dpt + dpk + dpphi
         write (filename, '("gamma_eul.dat")' )
         open(unitn, file=trim(filename), status='old',position='append')
-        write(unitn,*) SUM(dpt(1,1,:,1)) + SUM(dpk(1,1,:,1)) + dpphi
+        write(unitn,*) SUM(dpt(1,1,:,1)) + SUM(dpk(1,1,:,1)) + dpphi,SUM(dpt(1,1,:,1)),SUM(dpk(1,1,:,1)),dpphi
         close(unitn)
 
 
@@ -647,6 +651,7 @@ contains
         write(unitn,*) 0,0,l_inf,l_2
         close(unitn)
 
+
         write (filename, '("dpphi_sum_eul.dat")' )
         open(unitn, file=trim(filename), status='old',position='append')
         write(unitn,*) dpphi
@@ -659,6 +664,57 @@ contains
 
   end subroutine diagnostic_eul
 
+  subroutine TE_probe(cpt,k,phi,dp,pint,system,filenum)
+  use spmd_utils,       only: masterproc
+  real(KIND=r8), dimension(nlev),intent(in) :: cpt,k,dp
+  real(KIND=r8), dimension(nlev+1),intent(in) :: pint,phi
+  real(KIND=r8) :: te
+  integer :: i,unitn
+  integer, intent(in) :: filenum, system ! 1 = lagrangian, 2 = eulerian
+  character(len=256):: filename
+
+  if (masterproc) then
+
+      unitn = 8
+      te = 0.0_r8
+
+      !Treating state 0:
+      if (filenum == 1)then
+
+        if(system == 1)then
+               write (filename, '("n_gamma_lag.dat")' ) 
+        else
+               write (filename, '("n_gamma_eul.dat")' ) 
+        end if
+
+        do i=1,nlev
+               te = te + dp(i)*(cpt(i)+k(i)+( pint(i+1)*phi(i+1) - pint(i)*phi(i) )/dp(i) )
+        end do
+
+        open(unitn, file=trim(filename), status='replace')
+        write(unitn,*) te
+        close(unitn)
+
+      else
+        if(system == 1)then
+               write (filename, '("n_gamma_lag.dat")' )
+        else
+               write (filename, '("n_gamma_eul.dat")' ) 
+        end if
+
+        do i=1,nlev
+               te = te + dp(i)*(cpt(i)+k(i)+( pint(i+1)*phi(i+1) - pint(i)*phi(i) )/dp(i) )
+        end do
+
+        open(unitn, file=trim(filename), status='old',position='append')
+        write(unitn,*) te
+        close(unitn)
+
+      end if
+
+  end if
+
+  end subroutine TE_probe
 
   subroutine diagnostic(dpu,dpt,dpk,dpphi,filenum)
     use spmd_utils,       only: masterproc

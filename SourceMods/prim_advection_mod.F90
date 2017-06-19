@@ -990,7 +990,7 @@ contains
     use control_mod,            only : se_prescribed_wind_2d
     use dimensions_mod        , only : ntrac
     use dimensions_mod        , only : qsize_condensate_loading, qsize_condensate_loading_idx
-    use hack_vert_rmp         , only : get_levels,overwrite_state,write_data,write_data_TE,diagnostic,lhack_vert_rmp,diagnostic_eul,write_data_TE_eul
+    use hack_vert_rmp         !, only : get_levels,overwrite_state,write_data,write_data_TE,diagnostic,lhack_vert_rmp,diagnostic_eul,write_data_eul
     use spmd_utils            , only: masterproc
     !use physconst,              only: r_universal
 
@@ -1063,8 +1063,8 @@ contains
                  elem(ie)%state%t(:,:,k,np1) = t0(k)
 
                  !setting velocities to zero:
-                 !elem(ie)%state%v(:,:,1,:,np1) = 0._r8
-                 !elem(ie)%state%v(:,:,2,:,np1) = 0._r8
+                 elem(ie)%state%v(:,:,1,:,np1) = 0._r8
+                 elem(ie)%state%v(:,:,2,:,np1) = 0._r8
                 
         end do
 
@@ -1202,6 +1202,8 @@ contains
                 elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !T_rmp 
           end if
 
+          !Remap u,v
+
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u*dp_star_moist
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v*dp_star_moist
           if(filtered)then
@@ -1218,10 +1220,11 @@ contains
           if ( .not. se_prescribed_wind_2d ) &
                  elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_inv    !v_rmp
 
+
           if(remap_te)then
                 ! back out T from TE
 
-                ! call write_data_TE_eul(pint2,elem(ie)%state%t(1,1,:,np1),i)
+                 call write_data_TE_eul(pint2,elem(ie)%state%t(1,1,:,np1)*dp_moist(1,1,:),i)
 
                 ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !E_rmp
 
@@ -1282,6 +1285,10 @@ contains
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2._r8))/cpair  !T_rmp (E_rmp as t is used)
                 end if
           end if     
+
+          call TE_probe(elem(ie)%state%t(1,1,:,np1)*cpair,(elem(ie)%state%v(1,1,1,:,np1)**2+&
+                         elem(ie)%state%v(1,1,2,:,np1)**2)/2._r8,phi(1,1,:),dp_moist(1,1,:),pint2,2,i)  
+
 
           call diagnostic_eul(dp_moist*elem(ie)%state%v(:,:,1,:,np1),&
                 dp_moist*elem(ie)%state%t(:,:,:,np1)*cpair,&
