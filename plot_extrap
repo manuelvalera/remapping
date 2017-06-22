@@ -1,0 +1,39 @@
+#!/usr/bin/gnuplot -persist
+#Gnuplot script for plotting vertical remapping profiles
+#By Manuel Valera 05/24/17
+
+set terminal pngcairo enhanced font 'Verdana,10'
+#if (t<10){ set output "vert_prof_T_0".t.".png" } else { set output "vert_prof_T_".t.".png" }
+set output "extrap.png"
+set title "Boundary extrapolation"
+set multiplot layout 2, 1 ;
+
+#set title ""
+set xlabel "index k"
+set ylabel "pio_c (hPa)"
+#set yrange  #[1:900]
+#set xrange [-100:100]
+set format y '%g'
+set key right bottom
+#set logscale y
+
+
+plot "/scratch/cluster/mvalera/vrmp/run/pio_extrap.dat" u 1 w lp #t "pio_c"
+
+
+
+#set title "Aberration"
+set xlabel "pio_c"
+set ylabel "ao"
+set format y '%g'
+#set xrange auto
+set key right bottom
+#set logscale y
+
+
+plot '/scratch/cluster/mvalera/vrmp/run/ao_extrap.dat' u 1 w lp #t "mirrored"
+
+unset multiplot
+
+
+

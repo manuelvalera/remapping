@@ -981,7 +981,7 @@ contains
     !     state%dp3d(np1)  delta p on levels at end of timestep
     ! output:
     !     state%psdry(np1)          surface pressure at time np1
-    !
+    !i
     
     use hybvcoord_mod, only          : hvcoord_t
     use vertremap_mod,          only : remap1, remap1_nofilter,remap_Q_ppm
@@ -1168,9 +1168,9 @@ contains
                 if(filtered)then
 !                        call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
                 elseif(ppm)then
-                        call remap_Q_ppm(ttmp,np,1,1,1,dp_star_moist,dp_moist)
+                        call remap_Q_ppm(ttmp,np,1,1,1,dp_star_moist,dp_moist,1)
                 else
-                        call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+                        !call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
                 end if
 
                 elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !E_rmp (as t)
@@ -1209,9 +1209,9 @@ contains
           if(filtered)then
 !                  call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
           else if(ppm)then
-                  call remap_Q_ppm(ttmp,np,1,2,2,dp_star_moist,dp_moist)       
+                  call remap_Q_ppm(ttmp,np,1,2,2,dp_star_moist,dp_moist,2)       
           else
-                  call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+                  !call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
           end if
           !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
 
@@ -1321,9 +1321,9 @@ contains
               if(filtered)then
 !                      call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
               else if(ppm)then
-                      call remap_Q_ppm(ttmp,np,1,1,1,dp_moist,dp_star_moist) 
+                      call remap_Q_ppm(ttmp,np,1,1,1,dp_moist,dp_star_moist,1) 
               else
-                      call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
+                   !   call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
               end if
               elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !E (as t)
           else
@@ -1342,9 +1342,9 @@ contains
           if(filtered)then
 !                call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
           else if(ppm)then
-                call remap_Q_ppm(ttmp,np,1,2,2,dp_moist,dp_star_moist)
+                call remap_Q_ppm(ttmp,np,1,2,2,dp_moist,dp_star_moist,2)
           else
-                call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)  
+               ! call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)  
           end if
           !        call remap1_nofilter(ttmp,np,2,dp_star,dp)!
 
