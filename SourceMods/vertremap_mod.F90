@@ -61,7 +61,7 @@ subroutine remap1(Qdp,nx,qstart,qstop,qsize,dp1,dp2,hybrid)
        zero = 0._r8,one = 1._r8,tiny = 1.e-12_r8,qmax = 1.e50_r8
   integer :: zkr(nlev+1),filter_code(nlev),peaks,im1,im2,im3,ip1,ip2, &
        lt1,lt2,lt3,t1,t2,t3,t4,tm,tp,i,ilev,j,jk,k,q
-  integer :: qbeg, qend,vert_remap_q_alg=3
+  integer :: qbeg, qend,vert_remap_q_alg=1
   logical :: abort=.false.
 
   if (vert_remap_q_alg == 1 .or. vert_remap_q_alg == 2) then
@@ -481,7 +481,7 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
   ! Local Variables
   integer, parameter :: gs = 2                              !Number of cells to place in the ghost region
   real(kind=r8), dimension(  1-gs:nlev+2 ) :: pio    !Pressure at interfaces for old grid
-!  real(kind=r8), dimension(  1-gs:nlev+2 ) :: pio_c  !Pressure at cell for old grid 
+  real(kind=r8), dimension(  1-gs:nlev+2 ) :: pio_c  !Pressure at cell for old grid 
   real(kind=r8), dimension( 4  ) :: x_i,f_i  !Pressure at cell for old grid 
   real(kind=r8), dimension(  1-gs:nlev+2 ) :: lag    !Lagrangian interpolator 
   real(kind=r8), dimension(       nlev+1 ) :: pin    !Pressure at interfaces for new grid
@@ -493,7 +493,7 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
   real(kind=r8), dimension(       nlev   ) :: z1, z2
   real(kind=r8) :: ppmdx(10,0:nlev+1)  !grid spacings
   real(kind=r8) :: massn1, massn2,pio_l
-  integer :: i, j, k, q, kk, kid(nlev),vert_remap_q_alg=1,m,unitn=8,x_p
+  integer :: i, j, k, q, kk,kid(nlev),vert_remap_q_alg=1,m,unitn=8,x_p,extrap,ao_extrap
   character(len=256):: filename
 
 
@@ -515,61 +515,80 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
                                       !Therefore, the pressure of that mass cannot either.
       !Fill in the ghost regions with mirrored values. if vert_remap_q_alg is defined, this is of no consequence.
       do k = 1 , gs
-!         dpo(1   -k) = dpo(1+k) + ( (1-k) - (1+k) )/( (k) - (1+k) )*(dpo(k)- dpo(1+k) )
-!         dpo(nlev+k) = dpo(nlev+k-2) + ( pio(nlev+k) - pio(nlev+k-2))/(pio(nlev+k-1) - pio(nlev+k-2) )*&
-!                       ( dpo(nlev+k-1) - dpo(nlev+k-2) )
          dpo(1   -k) = dpo(       k)  
          dpo(nlev+k) = dpo(nlev+1-k)
       enddo
-   
+
+      extrap = 1 ! 0 = mirrored, 1 = linear, 2 = lagrangian
+      !defining the pressure inside cell to extrapolate ao later
+
+      if(extrap==1)then
       !LINEAR:
       !extrapolating pio
-      pio(0) = pio(2)+ (pio(1)-pio(2)) + dpo(1) 
-      pio(-1) = pio(1) + ( 2. )*(pio(0)-pio(1)) + dpo(0)
-
-!      pio(nlev+1) = pioi(nlev-1) + ( (nlev+1)-(nlev-1))/( (nlev+1)-nlev)*(pio(nlev)-pio(nlev-1))+dpo(nlev)
-!      pio(nlev+2) = pio(nlev) + ( (nlev+2)-(nlev))/( (nlev+1)-nlev)*(pio(nlev+1)-pio(nlev))+dpo(nlev+1)
-
-      !LAGRANGIAN:
-!      lag = 1.0_r8
-!      do k=10,-1,-1
-!        do m = 1,10
-!         do q = 1,10
-!                if(q/=m)then
-!                    lag(k) = lag(k)*(k-m)/(q-m)
-!                end if
-!         enddo
-!        enddo
-!      enddo
-
-!      pio_l = 0.0d0
-
-!      do k=10,0,-1
-!          pio_l = pio_l + pio(k)*lag(k)
-!      enddo
-!          pio(0) = pio_l
-
-!      do k=10,-1,-1
-!          pio_l = pio_l + pio(k)*lag(k)
-!      enddo
-!          pio(-1) = pio_l
+             pio(0) = pio(2)+ (pio(1)-pio(2)) + dpo(1)
+             pio(-1) = pio(1) + ( 2. )*(pio(0)-pio(1)) + dpo(0)
+ 
+            ! pio(nlev+1) = pio(nlev-1) + ( (nlev+1)-(nlev-1))/( (nlev)-(nlev-1) )*(pio(nlev)-pio(nlev-1))+dpo(nlev)
+            ! pio(nlev+2) = pio(nlev) + ( (nlev+2)-(nlev))/( (nlev+1)-nlev)*(pio(nlev+1)-pio(nlev))+dpo(nlev+1)
 
       !defining the pressure inside cell to extrapolate ao later
- !     do k=0,nlev+1
- !        pio_c(k) = (pio(k+1)-pio(k-1))/2.0_r8
- !     end do
- !        pio_c(-1) = pio_c(1) + ( 2. )*(pio_c(0)-pio_c(1))
-!         pio_c(nlev+2) = pio_c(nlev) + ( ((nlev+2) - (nlev))/( (nlev+1) - (nlev) )  )*(pio_c(nlev-1)-pio_c(nlev)) 
+             do k=0,nlev+1
+                pio_c(k) = (pio(k+1)+pio(k))/2.0_r8
+             end do
+
+             pio_c(-1) = pio_c(1) + ( 2. )*(pio_c(0)-pio_c(1))
+             !pio_c(nlev+2) = pio_c(nlev) + ( ((nlev+2) - (nlev))/( (nlev+1) - (nlev))  )*(pio_c(nlev+1)-pio_c(nlev)) 
+        
+      !LAGRANGIAN:
+      elseif(extrap==2)then
+
+      x_i(1:4) =  (/2, 4, 6, 11/) !taking 4 indexes to interpolate
+      f_i(1:4) =  (/pio(2), pio(4), pio(6), pio(11)/) !and it's value iny-axis
+
+      do x_p = 0,-1,-1
+       pio_l = 0.0d0
+       do m = 1,4
+         lag = 1.0_r8
+         do kk = 1,4
+                if(kk/=m)then
+                    lag(m) = lag(m)*( x_p  - x_i(kk))/( x_i(m) - x_i(kk) )
+                end if
+         enddo
+         pio_l = pio_l + f_i(m)*lag(m)
+       enddo
+      pio(x_p) = pio_l
+      enddo
 
 
- !     if(masterproc .and. field==1 )then
- !           write (filename, '("pio_extrap.dat")' )
- !           open(unitn, file=trim(filename),status='replace' )
- !           do k=-1,nlev+2
- !               write(unitn,*) pio_c(k)
- !           enddo
- !           close(unitn)
- !     endif
+
+
+      x_i(1:4) =  (/2, 4, 6, 11/) !taking 4 indexes to interpolate
+      f_i(1:4) =  (/pio_c(2), pio_c(4), pio_c(6), pio_c(11)/) !and it's value in y-axis
+
+      do x_p = 0,-1,-1
+       pio_l = 0.0d0
+       do m = 1,4
+         lag = 1.0_r8
+         do kk = 1,4
+                if(kk/=m)then
+                    lag(m) = lag(m)*( x_p  - x_i(kk))/( x_i(m) - x_i(kk) )
+                end if
+         enddo
+         pio_l = pio_l + f_i(m)*lag(m)
+       enddo
+      pio_c(x_p) = pio_l
+      enddo
+     end if
+
+
+     if(masterproc .and. field==1 )then
+           write (filename, '("pio_extrap.dat")' )
+           open(unitn, file=trim(filename),status='replace' )
+           do k=-1,nlev+2
+               write(unitn,*) pio(k)
+           enddo
+           close(unitn)
+     endif
 
       !Compute remapping intervals once for all tracers. Find the old grid cell index in which the
       !k-th new cell interface resides. Then integrate from the bottom of that old cell to the new
@@ -613,32 +632,29 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
 
-!        ao = 1.0d0
-
+        extrap = 1
+        ao_extrap = 1
 
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
         do k = 1 , gs
-!!         ao(1   -k) = ao(1+k) + ( (1-k) - (1+k) )/( (k) - (1+k) )*( ao(k)- ao(1+k) )  
-
-!!         ao(1   -k) = ao(1+k) + ( pio(1-k) - pio(1+k) )/( pio(k) - pio(1+k) )*( ao(k)- ao(1+k) )  
-!!         ao(nlev+k) = ao(nlev+k-2) + ( pio(nlev+k) - pio(nlev+k-2) )/(pio(nlev+k-1) -pio(nlev+k-2) )*&
-!!                       ( ao(nlev+k-1) - ao(nlev+k-2) )
-
-!          ao(1   -k) = ao(       k)
+          ao(1   -k) = ao(       k)
           ao(nlev+k) = ao(nlev+1-k)
         enddo
 
         !LINEAR:
+        if(extrap==1)then
          !extrapolating ao (scalar quant.):
          !left:
-!         if(pio(1) - pio(2) /= 0) then
-        !                ao(0) = ao(2) + ( 0 - 2 )/( 1 - 2 )*( ao(1)- ao(2) )  
+!         if(pio_c(1) - pio_c(2) /= 0) then
+!                        ao(0) = ao(2) + (( pio_c(0) - pio_c(2) )/( pio_c(1) - pio_c(2)  ))*( ao(1 )- ao(2) )  
+                        ao(0) = ao(2) + (( 0 - 2 )/( 1 - 2  ))*( ao(1)- ao(2) )  
 !         else
 !                ao(0) = ao(1)
 !         endif
 
-!         if( pio(0) - pio(1) /=0)then
-        !                 ao(-1) = ao(1) + ( -1 - 1 )/( 0 - 1 )*( ao(0)- ao(1) )   
+!         if( pio_c(0) - pio_c(1) /=0)then
+!                        ao(-1) = ao(1) + (( pio_c(-1) - pio_c(1) )/( pio_c(0) - pio_c(1) ))*( ao(0)- ao(1) )   
+                        ao(-1) = ao(1) + (( -1 - 1 )/( 0 - 1 ))*( ao(0)- ao(1) )   
 !         else
 !                 ao(-1) = ao(0)
 !         endif
@@ -657,19 +673,24 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
 !         else
 !                 ao(nlev+2) = ao(nlev+1)
 !         endif
+       endif
 
+       if(ao_extrap==1)then
        !LAGRANGIAN:
       
-       x_i(1:4) =  (/2, 4, 6, 11/)                 !taking 4 indexes to interpolate
-       f_i(1:4) =  (/ao(2), ao(4), ao(6), ao(11)/) !and it's value in y-axis
+       x_i(1:4) =  (/1., 4., 6., 15./)                 !taking 4 indexes to interpolate ! 2-4-6-11
+!       x_i(1:4) =  (/pio_c(2), pio_c(4), pio_c(6), pio_c(11)/)                 !taking 4 indexes to interpolate 
+       f_i(1:4) =  (/ao(1), ao(4), ao(6), ao(15)/) !and it's value in y-axis
+
        
       do x_p = 0,-1,-1
        pio_l = 0.0d0    
        do m = 1,4
          lag = 1.0_r8
          do kk = 1,4
-                if(kk/=m)then
-                    lag(kk) = lag(kk)*( x_p  - x_i(kk))/( x_i(m) - x_i(kk) )
+                if(m/=kk)then
+                    lag(m) = lag(m)*( x_p  - x_i(kk))/( x_i(m) - x_i(kk) ) !x_i indices
+!                    lag(m) = lag(m)*( pio_c(x_p)  - x_i(kk))/( x_i(m) - x_i(kk) )
                 end if
          enddo
          pio_l = pio_l + f_i(m)*lag(m)
@@ -678,7 +699,28 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
       enddo
 
 
-       if(masterproc .and. field==1 )then
+       x_i(1:4) =  (/nlev, nlev-4, nlev-6, nlev-11/)                
+!       x_i(1:4) =  (/pio_c(nlev), pio_c(nlev-4), pio_c(nlev-6), pio_c(nlev-11)/) 
+       f_i(1:4) =  (/ao(nlev), ao(nlev-4), ao(nlev-6), ao(nlev-11)/) 
+
+      do x_p = nlev+1,nlev+2
+       pio_l = 0.0d0    
+       do m = 1,4
+         lag = 1.0_r8
+         do kk = 1,4
+                if(m/=kk)then
+                    lag(m) = lag(m)*( x_p  - x_i(kk))/( x_i(m) - x_i(kk) ) !x_i indices
+!                    lag(m) = lag(m)*( pio_c(x_p)  - x_i(kk))/( x_i(m) - x_i(kk))
+                end if
+         enddo
+         pio_l = pio_l + f_i(m)*lag(m)
+       enddo      
+!       ao(x_p) = pio_l
+      enddo
+      end if
+
+
+      if(masterproc .and. field==1 )then
             write (filename, '("ao_extrap.dat")' )
             open(unitn, file=trim(filename),status='replace') !'old',position='append' )
             do k=-1,nlev+2
@@ -820,7 +862,7 @@ function compute_ppm( a , dx )    result(coefs)
     indE = nlev
   endif
 
-  lmt = 2
+  lmt = 1 !0 = PCM, 1 = PPM, 2 = Lin04
 
   if(lmt==2)then
     indB = 0

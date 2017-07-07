@@ -11,8 +11,7 @@ set multiplot layout 2, 1 ;
 #set title ""
 set xlabel "index k"
 set ylabel "pio_c (hPa)"
-#set yrange  #[1:900]
-#set xrange [-100:100]
+set xtics -1,1,32 
 set format y '%g'
 set key right bottom
 #set logscale y

@@ -990,10 +990,10 @@ contains
     use control_mod,            only : se_prescribed_wind_2d
     use dimensions_mod        , only : ntrac
     use dimensions_mod        , only : qsize_condensate_loading, qsize_condensate_loading_idx
-    use hack_vert_rmp         !, only : get_levels,overwrite_state,write_data,write_data_TE,diagnostic,lhack_vert_rmp,diagnostic_eul,write_data_eul
+    use hack_vert_rmp        ! , only : get_levels,overwrite_state,write_data,write_data_TE,diagnostic,lhack_vert_rmp,diagnostic_eul,write_data_eul
     use spmd_utils            , only: masterproc
     !use physconst,              only: r_universal
-
+    use MOM_remapping
 
     type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
     type(fvm_struct), intent(inout) :: fvm(:)
@@ -1008,15 +1008,17 @@ contains
     integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
     character(len=256):: filename
     real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry,dp_s_inv
+    real (kind=r8), dimension(np,np,nlev)  :: q_test,q_test_s
     real (kind=r8), dimension(np,np,nlev,2):: ttmp
     real (kind=r8), dimension(np,np,nlev+1):: phi
-    real(KIND=r8), dimension(nlev+1) :: pint1,pint2
+    real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
-    logical          :: remap_te,filtered,phi_inc,ppm    
+    logical          :: remap_te,filtered,phi_inc,ppm,pqm  
     real(KIND=r8) :: r_universal
     real(KIND=r8) :: dpphi,kappa
     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
-    
+    type(remapping_CS)                  :: CS
+    real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
     ! reference levels:
     !   dp(k) = (hyai(k+1)-hyai(k))*ps0 + (hybi(k+1)-hybi(k))*ps(i,j)
     !   hybi(1)=0          pure pressure at top of atmosphere
@@ -1040,6 +1042,11 @@ contains
       elem(ie)%state%psdry(:,:,np1) = hvcoord%hyai(1)*hvcoord%ps0 + &
            sum(elem(ie)%state%dp3d(:,:,:,np1),3)
       !
+
+      if(masterproc)then
+        print *, 'TEST... TEST ... TEST... '
+      end if
+
       if(lhack_vert_rmp) then                           !Remapping fixed profile
            
         call get_levels(1,pint1,pint2,t0) !option 1 is CAM5
@@ -1049,6 +1056,8 @@ contains
         ttmp = 0._r8
         phi = 0._r8
         dpphi = 0._r8
+        q_test = 1.0_r8
+        q_test(:,:,15) = 2.0_r8
         r_universal = 1.38065e-23*6.02214e26/28.966
         kappa = r_universal/cpair
 
@@ -1056,7 +1065,7 @@ contains
                  
                  dp_star_moist(:,:,k) = pint1(k+1)-pint1(k)
                  lnp1(k) = log(pint1(k+1))-log(pint1(k))
-                 
+        
                  dp_moist(:,:,k) = pint2(k+1)-pint2(k) 
                  lnp2(k) = log(pint2(k+1))-log(pint2(k)) 
                            
@@ -1079,7 +1088,7 @@ contains
         call diagnostic(dp_star_moist*elem(ie)%state%v(:,:,1,:,np1),&
                 dp_star_moist*elem(ie)%state%t(:,:,:,np1)*cpair,&
                 dp_star_moist*((elem(ie)%state%v(:,:,1,:,np1)**2+elem(ie)%state%v(:,:,2,:,np1)**2)/2._r8),dpphi,0)  !diagnostic stage 0 
-
+                
                 !END hacked-profile
 
       else                                              !Preserving old code
@@ -1098,8 +1107,9 @@ contains
                 end do
         end do
         if (minval(dp_star_moist)<0) call endrun('negative moist layer thickness.  timestep or remap time too large')
-      
+ 
         call remap1(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,hybrid=hybrid)
+  
         !
         ! compute moist reference pressure level thickness
        
@@ -1115,11 +1125,31 @@ contains
         dp_inv=1.0_R8/dp_moist !for efficiency
       end if                
 
-     
+      !!TRIVIAL CASE -- SANITY CHECK:
+!      dp_moist = dp_star_moist
+!      lnp2 = lnp1
+!      dp_inv = dp_s_inv
+
+
+      remap_te = .false.   !using Total Energy remapping instead of Temperature    
       filtered = .false.   !using remap1() instead of remap1_nofilter()
-      ppm = .true.        !finding out if ppm is different than remap() (no?)
-      remap_te = .true.   !using Total Energy remapping instead of Temperature
+      ppm = .false.        !CAM PPM
+      pqm = .true.       !MOM REMAPS
       phi_inc  = .true.   !using Geopotential term inside TE
+
+      if(pqm)then
+           call initialize_remapping(CS,'PPM_IH4',.true.,.true.,.true.,.true.)
+           if(masterproc)then
+             print *, "INIT MOM REMAP PASSED..."
+           endif
+      endif
+      do k=1,nlev
+           dp_dry(:,:,k) = dp_moist(:,:,k)
+           dp_star_dry(:,:,k) = dp_star_moist(:,:,k)
+      enddo
+
+      qdp_s_tmp = q_test(1,1,:)                       
+
 
       if(lhack_vert_rmp) then
         do i=1,99
@@ -1134,46 +1164,64 @@ contains
                            phi(:,:,k) = phi(:,:,k+1)+&
                                         r_universal*elem(ie)%state%t(:,:,k,np1)*&
                                         (log(pint1(k+1))-log(pint1(k)))                 
-                           if(k==nlev)then
-                                dpphi = pint1(k)*phi(1,1,k) !saving p*phi(surface)
-                           end if 
+                           !if(k==nlev)then
+                           !     dpphi = pint1(k)*phi(1,1,k) !saving p*phi(surface)
+                           !end if 
                            ttmp(:,:,k,1)= ttmp(:,:,k,1) + ( pint1(k+1)*phi(:,:,k+1) - &
                                         pint1(k)*phi(:,:,k) )/dp_star_moist(:,:,k) !Energy  
                         end do
 
-                        dpphi = pint1(1)*phi(1,1,1) !- dpphi !(k==1==top) p*phi(top) - p*phi(surface)
+                     !   dpphi = pint1(1)*phi(1,1,1) !- dpphi !(k==1==top) p*phi(top) - p*phi(surface)
 
-                        if(masterproc)then
-                          if(i==1)then
-                                write (filename, '("phi_TE_lag.dat")' )  
-                                open(unitn, file=trim(filename), status='replace' )
-                                write(unitn,*) dpphi,SUM(ttmp(1,1,:,1)*dp_star_moist(1,1,:)),cpair
-                                close(unitn)
-                          else 
-                                write (filename, '("phi_TE_lag.dat")' )  
-                                open(unitn,file=trim(filename),status='old',position='append' )
-                                write(unitn,*) dpphi,SUM(ttmp(1,1,:,1)*dp_star_moist(1,1,:) )
-                                close(unitn)
-                          end if
-                        endif
+                     !   if(masterproc)then
+                     !     if(i==1)then
+                     !           write (filename, '("phi_TE_lag.dat")' )  
+                     !           open(unitn, file=trim(filename), status='replace' )
+                     !           write(unitn,*) dpphi,SUM(ttmp(1,1,:,1)*dp_star_moist(1,1,:)),cpair
+                     !           close(unitn)
+                     !     else 
+                     !           write (filename, '("phi_TE_lag.dat")' )  
+                     !           open(unitn,file=trim(filename),status='old',position='append' )
+                     !           write(unitn,*) dpphi,SUM(ttmp(1,1,:,1)*dp_star_moist(1,1,:) )
+                     !           close(unitn)
+                     !     end if
+                     !   endif
 
-                end if            
+                end if           
 
+                elem(ie)%state%Qdp(:,:,:,6,np1_qdp) = q_test(:,:,:)*dp_star_dry(:,:,:)
+ 
                 if(i==1)then
                         call write_data_TE(pint1,ttmp(1,1,:,1),i)
                 end if
 
                 ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !E*dp_star_moist 
 
+!Remap TE forward
                 if(filtered)then
-!                        call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
+                       call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !E_rmp*dp_moist
                 elseif(ppm)then
-                        call remap_Q_ppm(ttmp,np,1,1,1,dp_star_moist,dp_moist,1)
+                       call remap_Q_ppm(ttmp,np,1,1,1,dp_star_moist,dp_moist,1)
+                       call remap_Q_ppm(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,2)
+                elseif(pqm)then
+                       
+                       dp_mom = dp_moist(1,1,:)
+                       dp_s_mom = dp_star_moist(1,1,:)
+                       ttmp_mom = 0._r8
+                       ttmp_s_mom = ttmp(1,1,:,1)*dp_s_inv(1,1,:)
+
+                       call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+                                  
+                       elem(ie)%state%t(1,1,:,np1) = ttmp_mom        
+        
                 else
                         !call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
                 end if
 
-                elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !E_rmp (as t)
+                if(.not.pqm)then
+                        elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !E_rmp (as t)
+                        q_test_s(:,:,:) = elem(ie)%state%Qdp(:,:,:,6,np1_qdp)/dp_dry(:,:,:)
+                end if
 
                       if(masterproc)then
                           if(i==1)then
@@ -1188,30 +1236,91 @@ contains
                                 close(unitn)
                           end if
                         endif
-
-
-
           else
-                ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T
-                ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !T*dp_star_moist
-                if(filtered)then
-                        call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !T_rmp*dp_moist
-                else
-                        call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+
+!Temperature-conserving remap (forward):
+
+                ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T        
+!                elem(ie)%state%Qdp(:,:,:,6,np1_qdp) = q_test(:,:,:)*dp_star_dry(:,:,:)
+
+                if(i==1)then
+                        call write_data_TE(pint1,ttmp(1,1,:,1),i)
                 end if
-                elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !T_rmp 
+
+                ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist !T*dp_star_moist
+          
+                if(filtered)then
+                       call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist) !T_rmp*dp_moist
+                elseif(ppm)then
+                       call remap_Q_ppm(ttmp,np,1,1,1,dp_star_moist,dp_moist,1)
+                       call remap_Q_ppm(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,2)
+                elseif(pqm)then
+                       dp_mom = dp_moist(1,1,:)
+                       dp_s_mom = dp_star_moist(1,1,:)
+                       ttmp_mom = 0._r8
+                       ttmp_s_mom = elem(ie)%state%t(1,1,:,np1) 
+
+                       call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+
+                       elem(ie)%state%t(1,1,:,np1) = ttmp_mom
+
+                       !Remap q only           
+
+                       call remapping_core_h(CS,nlev,dp_s_mom,qdp_s_tmp,nlev,dp_mom,qdp_tmp)
+                       !Tracer qdp
+                       elem(ie)%state%Qdp(1,1,:,6,np1_qdp) = qdp_tmp!*dp_star_dry(1,1,:)
+
+                else
+                       call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+                end if
+
+                if(.not.pqm)then
+                        elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  !T_rmp 
+                        q_test_s(:,:,:) = elem(ie)%state%Qdp(:,:,:,6,np1_qdp)/dp_dry(:,:,:)
+                end if
+
           end if
+
+          if(masterproc)then
+                if(i==1)then
+                       write (filename, '("Q_eul_",I0.3,".dat")' ) i
+                       open(unitn,file=trim(filename),status='replace')
+                       do k=1,nlev
+                             write(unitn,*) qdp_tmp(k) !elem(ie)%state%Qdp(1,1,k,6,np1_qdp)
+                       enddo
+                       close(unitn)
+
+                else
+                       write (filename, '("Q_eul_",I0.3,".dat")' ) i
+                       open(unitn,file=trim(filename),status='replace')
+                       do k=1,nlev
+                              write(unitn,*) qdp_tmp(k) !elem(ie)%state%Qdp(1,1,k,6,np1_qdp)
+                                               !elem(ie)%state%Qdp(1,1,k,6,np1_qdp)!*dp_moist(1,1,k)
+                       enddo
+                       close(unitn)
+                end if
+          endif
+
 
           !Remap u,v
 
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u*dp_star_moist
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v*dp_star_moist
           if(filtered)then
-!                  call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
+                  call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)          !u,v_rmp*dp_moist
           else if(ppm)then
                   call remap_Q_ppm(ttmp,np,1,2,2,dp_star_moist,dp_moist,2)       
+          elseif(pqm)then
+                  dp_mom = dp_moist(1,1,:)
+                  dp_s_mom = dp_star_moist(1,1,:)
+                  ttmp_mom = ttmp(1,1,:,1)
+                  ttmp_s_mom = ttmp(1,1,:,1)
+
+               !   call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+
+                  ttmp(1,1,:,1) = ttmp_mom
           else
-                  !call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
+                  call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)   
           end if
           !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
 
@@ -1226,7 +1335,7 @@ contains
 
                  call write_data_TE_eul(pint2,elem(ie)%state%t(1,1,:,np1)*dp_moist(1,1,:),i)
 
-                ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !E_rmp
+                ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !E_rmp as t
 
                 if(phi_inc)then
                    do k=nlev,1,-1
@@ -1240,11 +1349,11 @@ contains
 
                       elem(ie)%state%t(:,:,k,np1) = num_tmp(:,:,k)/den_tmp(:,:,k) !T_rmp
 
-!                      elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
-!                                ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
-!                                elem(ie)%state%v(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1))/(cpair-(pint2(k)*&
-!                                r_universal*(log(pint2(k+1))-log(pint2(k))))/dp_moist(:,:,k))
-!(pint2(k+1)-pint2(k))                                !T_rmp
+                !     elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
+                !     ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
+                !     elem(ie)%state%v(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1))/(cpair-(pint2(k)*&
+                !     r_universal*(log(pint2(k+1))-log(pint2(k))))/dp_moist(:,:,k))
+                !(pint2(k+1)-pint2(k))                                !T_rmp
 
                       phi(:,:,k) = phi(:,:,k+1)+r_universal*elem(ie)%state%t(:,:,k,np1)*&
                                 (log(pint2(k+1))-log(pint2(k))) !phi_rmp
@@ -1279,23 +1388,23 @@ contains
 
                    dpphi = pint2(1)*phi(1,1,1)  !dpphi_rmp
 
-                else
+                else !Recover T from whole energy E = cpT+K -> T = (E-K)/Cp
                         elem(ie)%state%t(:,:,:,np1) = &
                         ( elem(ie)%state%t(:,:,:,np1) - ((elem(ie)%state%v(:,:,1,:,np1)**2 + &
                         elem(ie)%state%v(:,:,2,:,np1)**2)/2._r8))/cpair  !T_rmp (E_rmp as t is used)
                 end if
           end if     
 
-          call TE_probe(elem(ie)%state%t(1,1,:,np1)*cpair,(elem(ie)%state%v(1,1,1,:,np1)**2+&
-                         elem(ie)%state%v(1,1,2,:,np1)**2)/2._r8,phi(1,1,:),dp_moist(1,1,:),pint2,2,i)  
+          !  call TE_probe(elem(ie)%state%t(1,1,:,np1)*cpair,(elem(ie)%state%v(1,1,1,:,np1)**2+&
+          !  elem(ie)%state%v(1,1,2,:,np1)**2)/2._r8,phi(1,1,:),dp_moist(1,1,:),pint2,2,i)  
 
 
-          call diagnostic_eul(dp_moist*elem(ie)%state%v(:,:,1,:,np1),&
-                dp_moist*elem(ie)%state%t(:,:,:,np1)*cpair,&
-                dp_moist*( ( elem(ie)%state%v(:,:,1,:,np1)**2+elem(ie)%state%v(:,:,2,:,np1)**2)/2._r8),dpphi,i)
-!diagnostic stage i
+          !  call diagnostic_eul(dp_moist*elem(ie)%state%v(:,:,1,:,np1),&
+          !  dp_moist*elem(ie)%state%t(:,:,:,np1)*cpair,&
+          ! dp_moist*( ( elem(ie)%state%v(:,:,1,:,np1)**2+elem(ie)%state%v(:,:,2,:,np1)**2)/2._r8),dpphi,i)
+          !diagnostic stage i
 
-!        call write_data(pint2,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i)!mid-state (eul)
+          ! call write_data(pint2,elem(ie)%state%t(1,1,:,np1),elem(ie)%state%v(1,1,1,:,np1),i)!mid-state (eul)
 
 
         !REMAPPING BACK....
@@ -1317,32 +1426,81 @@ contains
               end if
           
               ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !E_rmp*dp_moist                   
+        
+              !!!Mixing ratio remap back:
+              elem(ie)%state%Qdp(:,:,:,6,np1_qdp) = q_test_s(:,:,:)*dp_dry(:,:,:)
+
 
               if(filtered)then
-!                      call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
+                      call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !E*dp_star_moist
               else if(ppm)then
-                      call remap_Q_ppm(ttmp,np,1,1,1,dp_moist,dp_star_moist,1) 
+                 call remap_Q_ppm(ttmp,np,1,1,1,dp_moist,dp_star_moist,1) 
+                 call remap_Q_ppm(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_dry,dp_star_dry,2)
+              elseif(pqm)then
+                 ttmp_mom = ttmp(1,1,:,1)*dp_inv(1,1,:)
+                 ttmp_s_mom = 0._r8
+                 call remapping_core_h(CS,nlev,dp_mom,ttmp_mom,nlev,dp_s_mom,ttmp_s_mom)
+                   
+                 ttmp(1,1,:,1) = ttmp_s_mom
+                 
               else
-                   !   call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
+                      call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
               end if
               elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !E (as t)
-          else
+         else 
+
+  !Remapping Temperature-conserving (backwards)
               ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1) !T_rmp            
-              ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !T_rmp*dp_moist
-              if(filtered)then
-!                      call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !T*dp_star_moist
-              else
-              call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
+!              ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_moist      !T_rmp*dp_moist
+
+             ! elem(ie)%state%Qdp(:,:,:,6,np1_qdp) = q_test_s(:,:,:)*dp_dry(:,:,:)
+
+              if(i/=1)then
+                   call write_data_TE(pint1,elem(ie)%state%t(1,1,:,np1),i) !saving TE after i==1
               end if
-              elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !T 
+
+              if(filtered)then
+                 call remap1(ttmp,np,1,1,1,dp_moist,dp_star_moist) !T*dp_star_moist
+              elseif(ppm)then
+                 call remap_Q_ppm(ttmp,np,1,1,1,dp_moist,dp_star_moist,1)
+                 call remap_Q_ppm(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_dry,dp_star_dry,2)
+              elseif(pqm)then
+                 ttmp_mom = elem(ie)%state%t(1,1,:,np1)
+                 ttmp_s_mom = 0._r8
+                 call remapping_core_h(CS,nlev,dp_mom,ttmp_mom,nlev,dp_s_mom,ttmp_s_mom)
+
+                 elem(ie)%state%t(1,1,:,np1) = ttmp_s_mom
+
+                 qdp_tmp = elem(ie)%state%Qdp(1,1,:,6,np1_qdp)!*dp_inv(1,1,:)
+                 call remapping_core_h(CS,nlev,dp_mom,qdp_tmp,nlev,dp_s_mom,qdp_s_tmp)
+                 elem(ie)%state%Qdp(1,1,:,6,np1_qdp) = qdp_s_tmp!*dp_s_mom
+
+              else
+                 call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)   
+              end if
+
+              if(.not.pqm)then
+                      elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_s_inv  !T 
+              end if
+
+
           end if
+
+          if(.not.pqm)then
+                  q_test(:,:,:) = elem(ie)%state%Qdp(:,:,:,6,np1_qdp)/dp_star_dry(:,:,:)
+          end if 
 
           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_moist  !u_rmp*dp_moist
           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_moist  !v_rmp*dp_moist
           if(filtered)then
-!                call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
+                call remap1(ttmp,np,1,2,2,dp_moist,dp_star_moist)     !u,v*dp_star_moist
           else if(ppm)then
                 call remap_Q_ppm(ttmp,np,1,2,2,dp_moist,dp_star_moist,2)
+          elseif(pqm)then
+                 ttmp_mom = ttmp(1,1,:,1)*dp_inv(1,1,:)
+                 ttmp_s_mom = 0._r8
+                 call remapping_core_h(CS,nlev,dp_mom,ttmp_mom,nlev,dp_s_mom,ttmp_s_mom)
+                 ttmp(1,1,:,1) = ttmp_s_mom
           else
                ! call remap1_nofilter(ttmp,np,2,dp_moist,dp_star_moist)  
           end if
@@ -1354,11 +1512,11 @@ contains
                 elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_s_inv    !v
 
 
-          if(remap_te)then
+         if(remap_te)then
           
-          if(i/=1)then 
-                call write_data_TE(pint1,elem(ie)%state%t(1,1,:,np1),i)  !saving TE after i==1
-          end if
+               if(i/=1)then 
+                   call write_data_TE(pint1,elem(ie)%state%t(1,1,:,np1),i)  !saving TE after i==1
+               end if
           ! back out T from TE
                 if(phi_inc)then
                    do k=nlev,1,-1
@@ -1373,11 +1531,11 @@ contains
 
                       elem(ie)%state%t(:,:,k,np1) = num_tmp(:,:,k)/den_tmp(:,:,k) !T
 
-!                      elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
-!                                                    ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
-!                                elem(ie)%state%v(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1))/(cpair-(pint1(k)*&
-!                                r_universal*(log(pint1(k+1))-log(pint1(k))))/dp_star_moist(:,:,k))
-!(pint1(k+1)-pint1(k))             !T
+                        !  elem(ie)%state%t(:,:,k,np1) = (elem(ie)%state%t(:,:,k,np1) - &
+                        !       ((elem(ie)%state%v(:,:,1,k,np1)**2 + &
+                        !     elem(ie)%state%v(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1))/(cpair-(pint1(k)*&
+                        !    r_universal*(log(pint1(k+1))-log(pint1(k))))/dp_star_moist(:,:,k))
+                        !(pint1(k+1)-pint1(k))             !T
                              
                       phi(:,:,k) = phi(:,:,k+1)+r_universal*elem(ie)%state%t(:,:,k,np1)*&
                                             (log(pint1(k+1))-log(pint1(k))) !phi
@@ -1401,6 +1559,11 @@ contains
 
 
         end do  !END OF REMAPPING  
+
+        !if(i==99)then
+                exit
+        !end if
+
 !*********************************************************************************************************
       else    !if not hack-remapping:
           if(remap_te)then
