@@ -5,7 +5,7 @@ module hack_vert_rmp
   use hybvcoord_mod,          only: hvcoord_t
   implicit none
 
-  logical, parameter, public :: lhack_vert_rmp=.true.
+  logical, parameter, public :: lhack_vert_rmp=.false.
   !
   public :: get_levels
   public :: overwrite_state
