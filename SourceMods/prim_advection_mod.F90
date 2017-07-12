@@ -1161,18 +1161,20 @@ call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
           !Need to compute the interfaces pint1,2:
 
           do k=1,nlev+1
-                pint1(k) = sum(dp_star_moist(1,1,1:k-1))
-                pint2(k) = sum(dp_moist(1,1,1:k-1))
+                pint1(k) = 0.00000000001_r8
+                pint2(k) = 0.00000000001_r8
+                do i = 1,k-1
+                        pint1(k) = pint1(k) + dp_star_moist(1,1,i)
+                        pint2(k) = pint2(k) + dp_moist(1,1,i)
+                enddo
 
                 if(masterproc)then
-                       print*, pint1(k),k
-!                      write (filename, '("stat_", I0.3, ".dat")' )  k
-!                      open(unitn, file=trim(filename), status='replace' )
-!                          write(unitn,*) pint1(k)
-!                      close(unitn)
+                      print *, 'PINT LEVELS :',pint1(k),pint2(k),k
+                      write (filename, '("stat_", I0.3, ".dat")' )  k
+                      open(unitn, file=trim(filename), status='replace' )
+                          write(unitn,*) pint1(k),pint2(k),k
+                      close(unitn)
                 endif
-
-
           enddo          
    
           if(remap_te)then
@@ -1180,8 +1182,10 @@ call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
 !                ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
 !                        elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
 !                        elem(ie)%state%t(:,:,:,np1)*cpair
-
-call remap_E_cons(2,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)
+!          ttmp = 1._r8
+!          pint1 = 1._r8
+!          pint2 = 2._r8
+call remap_E_cons(1,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)
           ttmp = E_1
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
@@ -1386,21 +1390,21 @@ end subroutine hack_vert_rmp_init
     r_universal = 1.38065e-23*6.02214e26/28.966
     kappa = r_universal/cpair
 
-    phi_inc = .false.
+    phi_inc = .true.
     phi = 0._r8
-
+    
     dp_0_inv = 1._r8/dp_0
     dp_1_inv = 1._r8/dp_1
 
     !Calculating energy at system 0
-    ttmp(:,:,:,1)=(v_0(:,:,1,:,np1)**2 + v_0(:,:,2,:,np1)**2)/2._r8 + t_0(:,:,:,np1)*cpair 
+    ttmp(:,:,:,1) = (v_0(:,:,1,:,np1)**2 + v_0(:,:,2,:,np1)**2)/2._r8 + t_0(:,:,:,np1)*cpair 
 
     if(phi_inc)then
     !Calculating Phi term:
     do k=nlev,1,-1
 
         if(masterproc)then
-              print *, phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k) 
+              write(*,*) "DEBUG LEVELS :", phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k),k
               !write (filename, '("stat_0_", I0.3, ".dat")' )  k
               !open(unitn, file=trim(filename), status='replace' )
                 ! write(unitn,*) phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k)!
@@ -1408,7 +1412,7 @@ end subroutine hack_vert_rmp_init
               !close(unitn)
         endif
 
-        phi(:,:,k) = phi(:,:,k+1)+r_universal*t_0(:,:,k,np1)*(log(pint_0(k+1))-log(pint_0(k)))
+        phi(:,:,k) = phi(:,:,k+1) + r_universal*t_0(:,:,k,np1)*( log(pint_0(k+1)) - log(pint_0(k)) )
 
         ttmp(:,:,k,1)= ttmp(:,:,k,1) + (pint_0(k+1)*phi(:,:,k+1) - &
                        pint_0(k)*phi(:,:,k))*dp_0_inv(:,:,k) !Energy  
@@ -1477,10 +1481,6 @@ end subroutine hack_vert_rmp_init
                  v_1(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_1_inv    !v_rmp
     endif
 
-
-
-
-
     ttmp(:,:,:,1)=t_1(:,:,:,np1) !E_rmp as t
     E_1 = ttmp
  
@@ -1492,7 +1492,7 @@ end subroutine hack_vert_rmp_init
                           v_1(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1)
 
          num_tmp(:,:,k) = num_tmp(:,:,k)/cpair
-         den_tmp(:,:,k) = 1 - pint_1(k)*kappa*(log(pint_1(k+1))-log(pint_1(k)))*dp_1_inv(:,:,k)
+         den_tmp(:,:,k) = 1 - pint_1(k)*kappa*(log(pint_1(k+1))-log(pint_1(k)))!*dp_1_inv(:,:,k)
          t_1(:,:,k,np1) = num_tmp(:,:,k)/den_tmp(:,:,k) !T_rmp              
          phi(:,:,k) = phi(:,:,k+1)+r_universal*t_1(:,:,k,np1)*&
                           (log(pint_1(k+1))-log(pint_1(k))) !phi_rmp
