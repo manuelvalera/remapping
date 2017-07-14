@@ -1129,10 +1129,10 @@ contains
       !phi_inc  = .true.   !using Geopotential term inside TE
 
       if(pqm)then
-           call initialize_remapping(CS,'PPM_H4',.true.,.true.,.true.,.true.)
-           if(masterproc)then
-             print *, "INIT MOM REMAP PASSED..."
-           endif
+           call initialize_remapping(CSP,'PPM_H4',.true.,.true.,.true.,.true.)
+          ! if(masterproc)then
+          !   print *, "INIT MOM REMAP PASSED..."
+          ! endif
       endif
 
       if(lhack_vert_rmp) then
@@ -1147,9 +1147,9 @@ contains
 
 
           if(remap_te)then
-call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)                              
+call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)                              
           else!if(.not.remap_te)then
-call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)
+call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)
           end if
       
 
@@ -1160,21 +1160,27 @@ call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
       else
           !Need to compute the interfaces pint1,2:
 
+        !define pint1(1) as:
+!        pint1(1) = hvcoord%hyai(1)*hvcoord%ps0
+!        pint2(1) = hvcoord%hyai(1)*hvcoord%ps0
+
+        !start loop at k=2
+
           do k=1,nlev+1
-                pint1(k) = 0.00000000001_r8
+                pint1(k) = 0.00000000001_r8 ! ~ machine epsilon otherwise it blows up
                 pint2(k) = 0.00000000001_r8
                 do i = 1,k-1
                         pint1(k) = pint1(k) + dp_star_moist(1,1,i)
                         pint2(k) = pint2(k) + dp_moist(1,1,i)
                 enddo
 
-                if(masterproc)then
-                      print *, 'PINT LEVELS :',pint1(k),pint2(k),k
-                      write (filename, '("stat_", I0.3, ".dat")' )  k
-                      open(unitn, file=trim(filename), status='replace' )
-                          write(unitn,*) pint1(k),pint2(k),k
-                      close(unitn)
-                endif
+!                if(masterproc)then
+!                      print *, 'PINT LEVELS :',pint1(k),pint2(k),k
+!                      write (filename, '("stat_", I0.3, ".dat")' )  k
+!                      open(unitn, file=trim(filename), status='replace' )
+!                          write(unitn,*) pint1(k),pint2(k),k
+!                      close(unitn)
+!                endif
           enddo          
    
           if(remap_te)then
@@ -1182,16 +1188,15 @@ call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
 !                ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
 !                        elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
 !                        elem(ie)%state%t(:,:,:,np1)*cpair
-!          ttmp = 1._r8
-!          pint1 = 1._r8
-!          pint2 = 2._r8
+
 call remap_E_cons(1,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,E_1,t_1,v_1,pint2,elem,np1)
           ttmp = E_1
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
+          
           else
 
-call remap_T_cons(2,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,t_1,v_1,pint2,elem,np1)
+call remap_T_cons(1,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1,dp_moist,t_1,v_1,pint2,elem,np1)
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
 
@@ -1339,7 +1344,7 @@ end subroutine hack_vert_rmp_init
     use dimensions_mod        , only : qsize_condensate_loading,qsize_condensate_loading_idx
     use hack_vert_rmp        
     use spmd_utils            , only: masterproc
-    !use physconst,              only: r_universal
+    use physconst,              only: r_universal
     use MOM_remapping
 
     type (element_t), intent(inout) :: elem(:)
@@ -1356,10 +1361,10 @@ end subroutine hack_vert_rmp_init
     real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
     logical          :: remap_te,filtered,phi_inc,ppm,pqm
-    real(KIND=r8) :: r_universal
+!    real(KIND=r8) :: r_universal
     real(KIND=r8) :: dpphi,kappa
     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
-    type(remapping_CS)                  :: CS
+!    type(remapping_CS)                  :: CS
     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
 
     integer, intent(in) :: rmp_kind,np1
@@ -1385,9 +1390,19 @@ end subroutine hack_vert_rmp_init
     ! 3.- mom (remapping_core_h() using method from vertical_remap())
     ! 4.- no filter (remap1_nofilter())
     !============
+
+
+  !============
+  ! cons_kind(s):
+  ! 1.- Temperature conserving (no Kinetic or phi energies)
+  ! 2.- Energy conserving (according to Lin'04 energy conservation formula)
+  ! 3.- Energy conserving (according to Williamson'15 formula)
+  !============
+
+
  
     unitn = 8 
-    r_universal = 1.38065e-23*6.02214e26/28.966
+!    r_universal = 1.38065e-23*6.02214e26/28.966
     kappa = r_universal/cpair
 
     phi_inc = .true.
@@ -1396,28 +1411,28 @@ end subroutine hack_vert_rmp_init
     dp_0_inv = 1._r8/dp_0
     dp_1_inv = 1._r8/dp_1
 
-    !Calculating energy at system 0
+    !Calculating energy at system 0 (E = K + CpT)
     ttmp(:,:,:,1) = (v_0(:,:,1,:,np1)**2 + v_0(:,:,2,:,np1)**2)/2._r8 + t_0(:,:,:,np1)*cpair 
 
     if(phi_inc)then
-    !Calculating Phi term:
-    do k=nlev,1,-1
+    !Calculating and adding Phi term to Energy:
+      do k=nlev,1,-1
 
-        if(masterproc)then
-              write(*,*) "DEBUG LEVELS :", phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k),k
-              !write (filename, '("stat_0_", I0.3, ".dat")' )  k
-              !open(unitn, file=trim(filename), status='replace' )
-                ! write(unitn,*) phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k)!
+       if(masterproc)then
+            !  write(*,*) "DEBUG LEVELS :", phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k),k
+              write (filename, '("stat_0_", I0.3, ".dat")' )  k
+              open(unitn, file=trim(filename), status='replace' )
+               write(unitn,*) phi(1,1,k),ttmp(1,1,k,1),pint_0(k+1),pint_0(k)!
               
-              !close(unitn)
-        endif
+              close(unitn)
+       endif
 
         phi(:,:,k) = phi(:,:,k+1) + r_universal*t_0(:,:,k,np1)*( log(pint_0(k+1)) - log(pint_0(k)) )
 
         ttmp(:,:,k,1)= ttmp(:,:,k,1) + (pint_0(k+1)*phi(:,:,k+1) - &
                        pint_0(k)*phi(:,:,k))*dp_0_inv(:,:,k) !Energy  
 
-    end do
+      end do
     end if
 
     ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_0 !E*dp_star_moist 
@@ -1428,18 +1443,24 @@ end subroutine hack_vert_rmp_init
          call remap_Q_ppm(ttmp,np,1,1,1,dp_0,dp_1,1)
 !         call remap_Q_ppm(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,2)
     elseif(rmp_kind==3)then
-         dp_mom = dp_1(1,1,:)
-         dp_s_mom = dp_0(1,1,:)
-         ttmp_mom = 0._r8
-         ttmp_s_mom = ttmp(1,1,:,1)*dp_0_inv(1,1,:)
+        do i=1,np
+         do j=1,np
+                 dp_mom = dp_1(i,j,:)
+                 dp_s_mom = dp_0(i,j,:)
+                 ttmp_mom = ttmp(i,j,:,1)*dp_0_inv(i,j,:)!0._r8
+                 ttmp_s_mom = ttmp(i,j,:,1)*dp_0_inv(i,j,:)
 
-         call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+                 call remapping_core_h(CSP,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
 
-         t_1(1,1,:,np1) = ttmp_mom
+                 t_1(i,j,:,np1) = ttmp_mom
+
 
 !         call remapping_core_h(CS,nlev,dp_s_mom,qdp_s_tmp,nlev,dp_mom,qdp_tmp)
          !Tracer qdp
-!         elem(ie)%state%Qdp(1,1,:,6,np1_qdp) = qdp_tmp
+!         elem(ie)%state%Qdp(i,j,:,6,np1_qdp) = qdp_tmp
+         enddo
+        enddo
+
     else
          call remap1_nofilter(ttmp,np,2,dp_0,dp_1)   
     end if
@@ -1458,18 +1479,23 @@ end subroutine hack_vert_rmp_init
     else if(rmp_kind==2)then
          call remap_Q_ppm(ttmp,np,1,2,2,dp_0,dp_1,2)
     elseif(rmp_kind==3)then
-         dp_mom = dp_1(1,1,:)
-         dp_s_mom = dp_0(1,1,:)
-         !remap u
-         ttmp_mom = 0._r8
-         ttmp_s_mom = ttmp(1,1,:,1)*dp_0_inv(1,1,:)
-         call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
-         ttmp(1,1,:,1) = ttmp_mom
-         !remap v
-         ttmp_mom = 0._r8
-         ttmp_s_mom = ttmp(1,1,:,2)*dp_0_inv(1,1,:)
-         call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
-         ttmp(1,1,:,2) = ttmp_mom
+        do i=1,np
+         do j=1,np
+                 dp_mom = dp_1(i,j,:)
+                 dp_s_mom = dp_0(i,j,:)
+                 !remap u
+                 ttmp_mom = 0._r8
+                 ttmp_s_mom = ttmp(i,j,:,1)*dp_0_inv(i,j,:)
+                 call remapping_core_h(CSP,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+                 ttmp(i,j,:,1) = ttmp_mom
+                 !remap v
+                 ttmp_mom = 0._r8
+                 ttmp_s_mom = ttmp(i,j,:,2)*dp_0_inv(i,j,:)
+                 call remapping_core_h(CSP,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+                 ttmp(i,j,:,2) = ttmp_mom
+         enddo
+        enddo
+
     else
          call remap1_nofilter(ttmp,np,2,dp_0,dp_1)
     end if
@@ -1487,12 +1513,10 @@ end subroutine hack_vert_rmp_init
     !Recover Temperature from Energy (Lin'04):
     if(phi_inc)then
       do k=nlev,1,-1
-         num_tmp(:,:,k) = t_1(:,:,k,np1) - &
-                          ((v_1(:,:,1,k,np1)**2 + &
-                          v_1(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1)
+         num_tmp(:,:,k) = t_1(:,:,k,np1) - ((v_1(:,:,1,k,np1)**2 + v_1(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1)
 
          num_tmp(:,:,k) = num_tmp(:,:,k)/cpair
-         den_tmp(:,:,k) = 1 - pint_1(k)*kappa*(log(pint_1(k+1))-log(pint_1(k)))!*dp_1_inv(:,:,k)
+         den_tmp(:,:,k) = 1 - pint_1(k)*kappa*(log(pint_1(k+1))-log(pint_1(k)))*dp_1_inv(:,:,k)
          t_1(:,:,k,np1) = num_tmp(:,:,k)/den_tmp(:,:,k) !T_rmp              
          phi(:,:,k) = phi(:,:,k+1)+r_universal*t_1(:,:,k,np1)*&
                           (log(pint_1(k+1))-log(pint_1(k))) !phi_rmp
@@ -1533,7 +1557,7 @@ end subroutine hack_vert_rmp_init
     real(KIND=r8) :: r_universal
     real(KIND=r8) :: dpphi,kappa
     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
-    type(remapping_CS)                  :: CS
+!    type(remapping_CS)                  :: CS
     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
 
     integer, intent(in) :: rmp_kind,np1
@@ -1580,21 +1604,24 @@ end subroutine hack_vert_rmp_init
             call remap_Q_ppm(ttmp,np,1,1,1,dp_0,dp_1,1)
 !            call remap_Q_ppm(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,2)
     elseif(rmp_kind==3)then
-            dp_mom = dp_1(1,1,:)
-            dp_s_mom = dp_0(1,1,:)
+        do i=1,np
+         do j=1,np
+            dp_mom = dp_1(i,j,:)
+            dp_s_mom = dp_0(i,j,:)
             ttmp_mom = 0._r8
-            ttmp_s_mom = t_0(1,1,:,np1)
+            ttmp_s_mom = ttmp(i,j,:,1)*dp_0(i,j,:) !t_0(i,j,:,np1)
 
-            call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+            call remapping_core_h(CSP,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
 
-            t_1(1,1,:,np1) = ttmp_mom
+            t_1(i,j,:,np1) = ttmp_mom
 
             !Remap q only           
 
 !            call remapping_core_h(CS,nlev,dp_s_mom,qdp_s_tmp,nlev,dp_mom,qdp_tmp)
             !Tracer qdp
 !            elem(ie)%state%Qdp(1,1,:,6,np1_qdp) = qdp_tmp!*dp_star_dry(1,1,:)
-
+        enddo
+       enddo
     else
             call remap1_nofilter(ttmp,np,2,dp_0,dp_1)
     end if
@@ -1622,13 +1649,13 @@ end subroutine hack_vert_rmp_init
          !remap u
          ttmp_mom = ttmp(1,1,:,1)
          ttmp_s_mom = ttmp(1,1,:,1)*dp_s_inv(1,1,:)
-         call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+         call remapping_core_h(CSP,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
          v_1(1,1,1,:,np1) = ttmp_mom
 
          !remap v
          ttmp_mom = ttmp(1,1,:,2)
          ttmp_s_mom = ttmp(1,1,:,2)*dp_s_inv(1,1,:)
-         call remapping_core_h(CS,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
+         call remapping_core_h(CSP,nlev,dp_s_mom,ttmp_s_mom,nlev,dp_mom,ttmp_mom)
          v_1(1,1,2,:,np1) = ttmp_mom
     else
          call remap1_nofilter(ttmp,np,2,dp_0,dp_1)
@@ -1679,7 +1706,7 @@ end subroutine hack_vert_rmp_init
     real(KIND=r8) :: r_universal
     real(KIND=r8) :: dpphi,kappa
     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
-    type(remapping_CS)                  :: CS
+!    type(remapping_CS)                  :: CS
     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
 
     integer, intent(in) :: num_times,cons_kind,rmp_kind,np1
@@ -1699,7 +1726,10 @@ end subroutine hack_vert_rmp_init
     !============
 !    cons_kind(s):
     ! 1.- Temperature conserving (no Kinetic or phi energies)
-    ! 2.- Energy conserving (according to Lin'04 energy conservation formula)
+    ! 2.- Energy conserving (according to Lin'04 energy conservation formula: 
+    ! TE = K + CpT + Phi
+    ! 3.- Energy conserving (according to Williamson'15 formula)
+    ! TE = K + CpT
     !============
 
 
@@ -1726,7 +1756,7 @@ end subroutine hack_vert_rmp_init
 
     
 
-    if(cons_kind==1)then    
+    if(cons_kind==2)then    
         do i = 1,num_times
                 call remap_E_cons(rmp_kind,dp_0,E_0,t_0,v_0,pint_0,dp_1,E_1,t_1,v_1,pint_1,elem,np1)
                 if(masterproc)then
@@ -1785,7 +1815,7 @@ end subroutine hack_vert_rmp_init
                 endif
         enddo
 
-    elseif(cons_kind==2)then
+    elseif(cons_kind==1)then
         do i = 1,num_times
                 call remap_T_cons(rmp_kind,dp_0,t_0,v_0,pint_0,dp_1,t_1,v_1,pint_1,elem,np1)
 

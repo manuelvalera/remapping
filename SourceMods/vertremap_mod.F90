@@ -753,6 +753,86 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
 ! call t_stopf('remap_Q_ppm')
 end subroutine remap_Q_ppm
 
+subroutine remap2(Qdp,nx,qstart,qstop,qsize,dp_1,dp_2,rmp_kind,hybrid)
+
+  !Wrapper for the vertical remapping techniques explored by M. Valera during
+  !the SiParCS internship, Summer 2017.
+  !Layout based on previous code (remap1())/
+
+  !============
+  ! rmp_kind(s):
+  ! 1.- filtered (remap1_filter())
+  ! 2.- ppm (remap_Q_ppm)
+  ! 3.- mom (remapping_core_h() using method from vertical_remap() line 1131
+  ! -> initialize_remapping())
+  ! 4.- no filter (remap1_nofilter())
+  !============
+ 
+  ! remap field
+  ! input:  Qdp   field to be remapped (NOTE: MASS, not MIXING RATIO)
+  !         dp1   layer thickness (source)
+  !         dp2   layer thickness (target)
+  !
+  ! output: remaped Qdp, conserving mass, monotone on Q=Qdp/dp
+  !
+  use hybrid_mod, only : hybrid_t, get_loop_ranges, config_thread_region
+  use thread_mod, only : tracer_num_threads
+  use MOM_remapping
+
+  implicit none
+  integer, intent(in) :: nx,qstart,qstop,qsize
+  real (kind=r8), intent(inout) :: Qdp(nx,nx,nlev,qsize)
+  real (kind=r8), intent(in) :: dp_1(nx,nx,nlev),dp_2(nx,nx,nlev)
+  type (hybrid_t), optional :: hybrid
+  integer, intent(in) :: rmp_kind
+  ! ========================
+  ! Local Variables
+  ! ========================
+
+  type (hybrid_t) :: hybridnew
+  real (kind=r8), dimension(nlev+1)    :: rhs,lower_diag,diag,upper_diag,q_diag,zgam,z1c,z2c,zv
+  real (kind=r8), dimension(nlev)      :: h,Qcol,dy,za0,za1,za2,zarg,zhdp
+  real (kind=r8)  :: f_xm,level1,level2,level4,level5, &
+       peaks_min,peaks_max,tmp_cal,xm,xm_d,zv1,zv2, &
+       zero = 0._r8,one = 1._r8,tiny = 1.e-12_r8,qmax = 1.e50_r8
+  integer :: zkr(nlev+1),filter_code(nlev),peaks,im1,im2,im3,ip1,ip2, &
+       lt1,lt2,lt3,t1,t2,t3,t4,tm,tp,i,ilev,j,jk,k,q
+  integer :: qbeg, qend,vert_remap_q_alg=1
+  logical :: abort=.false.
+
+  real (kind=r8), dimension(np,np,nlev)  :: dp_1_inv!,dp_2_inv
+  real, dimension(nlev) :: dp_1_mom,qdp_1_mom,dp_2_mom,qdp_2_mom
+
+  dp_1_inv = 1._r8/dp_1
+!  dp_2_inv = 1._r8/dp_2
+
+  if(rmp_kind==1)then
+            call remap1(Qdp,np,1,1,1,dp_1,dp_2) !T_rmp*dp_moist
+  elseif(rmp_kind==2)then
+            call remap_Q_ppm(Qdp,np,1,1,1,dp_1,dp_2,1)
+  elseif(rmp_kind==3)then
+
+          do i=1,np
+                do j=1,np
+
+                    dp_1_mom = dp_1(i,j,:)
+                    dp_2_mom = dp_2(i,j,:)
+                    qdp_1_mom = Qdp(i,j,:,qsize)*dp_1_inv(i,j,:) !qsize = np1 ??
+                    qdp_2_mom = 0._r8
+
+                    call remapping_core_h(CSP,nlev,dp_1_mom,qdp_1_mom,nlev,dp_2_mom,qdp_2_mom)
+
+                    Qdp(i,j,:,qsize) = qdp_2_mom
+                enddo
+          enddo
+
+          Qdp(:,:,:,qsize) = Qdp(:,:,:,qsize)*dp_2   
+
+  else
+            call remap1_nofilter(Qdp,np,2,dp_1,dp_2)
+  end if
+
+end subroutine remap2
 
 !=======================================================================================================!
 
