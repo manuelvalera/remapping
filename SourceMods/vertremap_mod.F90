@@ -29,6 +29,8 @@ module vertremap_mod
   public remap1_nofilter         ! remap any field, splines, no filter
 ! todo: tweak interface to match remap1 above, rename remap1_ppm:
   public remap_q_ppm             ! remap state%Q, PPM, monotone
+  public remap2                  ! remap wrapper including MOM routines
+
 
   contains
 
