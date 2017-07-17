@@ -1132,9 +1132,6 @@ contains
 
       if(pqm)then
            call initialize_remapping(CSP,'PPM_H4',.true.,.true.,.true.,.true.)
-          ! if(masterproc)then
-          !   print *, "INIT MOM REMAP PASSED..."
-          ! endif
       endif
 
       if(lhack_vert_rmp) then
@@ -1145,20 +1142,20 @@ contains
 !      enddo
 
       !qdp_s_tmp = q_test(1,1,:)               
+       do k=1,nlev+1
+            pint1_3d(:,:,k) = pint1(k)
+            pint2_3d(:,:,k) = pint2(k)
+       enddo
 
 
-
-          if(remap_te)then
-              do k=1,nlev
-                pint1_3d(:,:,k) = pint1(k)
-                pint2_3d(:,:,k) = pint2(k)
-              enddo
+       if(remap_te)then
 call remap_back_forth(99,2,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1) 
-          else!if(.not.remap_te)then
+       else
 call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
-          end if
-      
 
+       end if
+      
+        
           exit
 
    !if not hack-remapping:
@@ -1168,23 +1165,25 @@ call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
 
           ptop = hvcoord%hyai(1)*hvcoord%ps0
           pint1_3d(:,:,1) = ptop
+          pint2_3d(:,:,1) = ptop
+
           do k=1,nlev
             pint1_3d(:,:,k+1) = pint1_3d(:,:,k) + dp_star_moist(:,:,k)
             pint2_3d(:,:,k+1) = pint2_3d(:,:,k) + dp_moist(:,:,k)
 
-                  if(masterproc)then
-                      if(k==1)then  
-                        write (filename, '("stat_.dat")' )
-                        open(unitn, file=trim(filename), status='replace' )
-                        write(unitn,*) pint1_3d(1,1,k),pint2_3d(1,1,k),k
-                        close(unitn)
-                      else
-                        write (filename, '("stat_.dat")' )
-                        open(unitn, file=trim(filename),status='old',position='append')
-                        write(unitn,*) pint1_3d(1,1,k),pint2_3d(1,1,k),k
-                        close(unitn)
-                      endif
-                  endif
+!                  if(masterproc)then
+!                      if(k==1)then  
+!                        write (filename, '("stat_.dat")' )
+!                        open(unitn, file=trim(filename), status='replace' )
+!                        write(unitn,*) pint1_3d(1,1,k),pint2_3d(1,1,k),k
+!                        close(unitn)
+!                      else
+!                        write (filename, '("stat_.dat")' )
+!                        open(unitn, file=trim(filename),status='old',position='append')
+!                        write(unitn,*) pint1_3d(1,1,k),pint2_3d(1,1,k),k
+!                        close(unitn)
+!                      endif
+!                  endif
           end do
    
           if(remap_te)then
@@ -1193,14 +1192,14 @@ call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
 !                        elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
 !                        elem(ie)%state%t(:,:,:,np1)*cpair
 
-call remap_E_cons(1,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
+call remap_E_cons(3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
           ttmp = E_1
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
           
           else
 
-call remap_T_cons(1,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,t_1,v_1,pint2_3d,elem,np1)
+call remap_T_cons(3,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,t_1,v_1,pint2_3d,elem,np1)
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
 
@@ -1430,8 +1429,8 @@ end subroutine hack_vert_rmp_init
       end do
     end if
 
-    ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_0 !E*dp_0t 
-    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind)
+    ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_0 !E*dp_0 
+    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,1)
     t_1(:,:,:,np1) = ttmp(:,:,:,1)   !E_rmp*dp_1
 
     if(rmp_kind/=3)then
@@ -1442,11 +1441,11 @@ end subroutine hack_vert_rmp_init
     !Remap velocities:
 
     ttmp(:,:,:,1)=v_0(:,:,1,:,np1)*dp_0 !u*dp_0
-    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind)
+    call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
     v_1(:,:,1,:,np1) = ttmp(:,:,:,1)
 
-    ttmp(:,:,:,2)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
-    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind)
+    ttmp(:,:,:,1)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
+    call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
     v_1(:,:,2,:,np1) = ttmp(:,:,:,1)
 
     if(rmp_kind/=3)then
@@ -1530,15 +1529,10 @@ end subroutine hack_vert_rmp_init
     
     ttmp(:,:,:,1) = t_0(:,:,:,np1) !T        
     !    elem(ie)%state%Qdp(:,:,:,6,np1_qdp) = q_test(:,:,:)*dp_star_dry(:,:,:)
-
-    !if(i==1)then
-        !    call write_data_TE(pint1,ttmp(1,1,:,1),i)
-    !end if
-
-    
+  
     ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_0 !T*dp_star_moist
 
-    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind)
+    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,1)
 
     t_1(:,:,:,np1) = ttmp(:,:,:,1)   !E_rmp*dp_1
 
@@ -1550,12 +1544,12 @@ end subroutine hack_vert_rmp_init
     !Remap velocities:
 
     ttmp(:,:,:,1)=v_0(:,:,1,:,np1)*dp_0 !u*dp_0
-    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind)
+    call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
     v_1(:,:,1,:,np1) = ttmp(:,:,:,1)
 
 
-    ttmp(:,:,:,2)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
-    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind)
+    ttmp(:,:,:,1)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
+    call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
     v_1(:,:,2,:,np1) = ttmp(:,:,:,1)
 
     if(rmp_kind/=3)then
@@ -1639,19 +1633,10 @@ end subroutine hack_vert_rmp_init
     ! 4.- no filter (remap1_nofilter())
     !============
 
-    !ttmp = E_0
-    !elem(ie)%state%v = v_0
-    !elem(ie)%state%t = t_0
-    !pint1 = pint_0
-    !pint2 = pint_1
+    
     phi = 0._r8
     unitn = 8
-    !dp_star_moist = dp_0
-    !dp_s_inv = 1._r8/dp_0
-    !dp_moist = dp_1
-    !dp_inv = 1._r8/dp_1
-
-    
+   
 
     if(cons_kind==2)then    
         do i = 1,num_times
@@ -1714,11 +1699,11 @@ end subroutine hack_vert_rmp_init
 
     elseif(cons_kind==1)then
         do i = 1,num_times
-                call remap_T_cons(rmp_kind,dp_0,t_0,v_0,pint_0(1,1,:),dp_1,t_1,v_1,pint_1,elem,np1)
+                call remap_T_cons(rmp_kind,dp_0,t_0,v_0,pint_0,dp_1,t_1,v_1,pint_1,elem,np1)
 
                 !WRITE FILES eulerian ?
 
-                call remap_T_cons(rmp_kind,dp_1,t_1,v_1,pint_1,dp_0,t_0,v_0,pint_0(1,1,:),elem,np1)
+                call remap_T_cons(rmp_kind,dp_1,t_1,v_1,pint_1,dp_0,t_0,v_0,pint_0,elem,np1)
 
                 !WRITE FILES lagrangian stage i
                 call write_data(pint_0(1,1,:),t_0(1,1,:,np1),v_0(1,1,1,:,np1),i)
@@ -1728,15 +1713,15 @@ end subroutine hack_vert_rmp_init
                                 dp_0*((v_0(:,:,1,:,np1)**2 + v_0(:,:,2,:,np1)**2)/2._r8),0._r8,i)
 
 
-!                if(i==num_times)then
-!                        exit
-!                endif
+                if(i==num_times)then
+                        exit
+                endif
         enddo
     
     end if
 
 
-    !call exit(0) 
+!    call exit(0) 
 
    end subroutine remap_back_forth
 
