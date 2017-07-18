@@ -1,0 +1,11 @@
+#It is possible to use a combination of these operations to compute the variance and standard deviation of a field stored in a single file or across multiple files. The procedure to compute the temporal standard deviation of the surface pressure at all points in a single file in.nc involves three steps.
+
+#ncwa -O -v prs_sfc -a time in.nc out.nc
+#ncbo -O -v prs_sfc in.nc out.nc out.nc 
+#ncra -O -y rmssdn out.nc out.nc
+
+#First construct the temporal mean of prs_sfc in the file out.nc. Next overwrite out.nc with the anomaly (deviation from the mean). Finally overwrite out.nc with the root-mean-square of itself. Note the use of ‘-y rmssdn’ (rather than ‘-y rms’) in the final step. This ensures the standard deviation is correctly normalized by one fewer than the number of time samples. The procedure to compute the variance is identical except for the use of ‘-y avgsqr’ instead of ‘-y rmssdn’ in the final step.
+
+ncwa -O -v T -a lev FHS-1200-phi.cam.h1.0001-01-31-00000.nc out.nc
+ncbo -O -v T FHS-1200-phi.cam.h1.0001-01-31-00000.nc out.nc out.nc
+ncra -O -y avgsqr out.nc out.nc

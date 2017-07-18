@@ -521,7 +521,7 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
          dpo(nlev+k) = dpo(nlev+1-k)
       enddo
 
-      extrap = 1 ! 0 = mirrored, 1 = linear, 2 = lagrangian
+      extrap = 0 ! 0 = mirrored, 1 = linear, 2 = lagrangian
       !defining the pressure inside cell to extrapolate ao later
 
       if(extrap==1)then
@@ -583,14 +583,14 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
      end if
 
 
-     if(masterproc .and. field==1 )then
-           write (filename, '("pio_extrap.dat")' )
-           open(unitn, file=trim(filename),status='replace' )
-           do k=-1,nlev+2
-               write(unitn,*) pio(k)
-           enddo
-           close(unitn)
-     endif
+!     if(masterproc .and. field==1 )then
+!           write (filename, '("pio_extrap.dat")' )
+!           open(unitn, file=trim(filename),status='replace' )
+!           do k=-1,nlev+2
+!               write(unitn,*) pio(k)
+!           enddo
+!           close(unitn)
+!     endif
 
       !Compute remapping intervals once for all tracers. Find the old grid cell index in which the
       !k-th new cell interface resides. Then integrate from the bottom of that old cell to the new
@@ -634,8 +634,8 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
 
-        extrap = 1
-        ao_extrap = 1
+        extrap = 0
+        ao_extrap = 0
 
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
         do k = 1 , gs
@@ -722,18 +722,18 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
       end if
 
 
-      if(masterproc .and. field==1 )then
-            write (filename, '("ao_extrap.dat")' )
-            open(unitn, file=trim(filename),status='replace') !'old',position='append' )
-            do k=-1,nlev+2
-                if(k>0 .and. k<nlev+1)then
-                write(unitn,*) ao(k),Qdp(1,1,k,1)
-                else
-                write(unitn,*) ao(k)
-                endif
-            enddo
-            close(unitn)
-       endif
+!      if(masterproc .and. field==1 )then
+!            write (filename, '("ao_extrap.dat")' )
+!            open(unitn, file=trim(filename),status='replace') !'old',position='append' )
+!            do k=-1,nlev+2
+!                if(k>0 .and. k<nlev+1)then
+!                write(unitn,*) ao(k),Qdp(1,1,k,1)
+!                else
+!                write(unitn,*) ao(k)
+!                endif
+!            enddo
+!            close(unitn)
+!       endif
 
 
         !Compute monotonic and conservative PPM reconstruction over every cell

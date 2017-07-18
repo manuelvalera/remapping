@@ -1131,7 +1131,7 @@ contains
       !phi_inc  = .true.   !using Geopotential term inside TE
 
       if(pqm)then
-           call initialize_remapping(CSP,'PPM_H4',.true.,.true.,.true.,.true.)
+           call initialize_remapping(CSP,'PQM_IH6IH5',.true.,.true.,.true.,.true.)
       endif
 
       if(lhack_vert_rmp) then
@@ -1192,14 +1192,14 @@ call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
 !                        elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
 !                        elem(ie)%state%t(:,:,:,np1)*cpair
 
-call remap_E_cons(3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
+call remap_E_cons(2,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
           ttmp = E_1
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
           
           else
 
-call remap_T_cons(3,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,t_1,v_1,pint2_3d,elem,np1)
+call remap_T_cons(2,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,t_1,v_1,pint2_3d,elem,np1)
           elem(ie)%state%t = t_1
           elem(ie)%state%v = v_1
 
@@ -1441,11 +1441,11 @@ end subroutine hack_vert_rmp_init
     !Remap velocities:
 
     ttmp(:,:,:,1)=v_0(:,:,1,:,np1)*dp_0 !u*dp_0
-    call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
+    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,2)
     v_1(:,:,1,:,np1) = ttmp(:,:,:,1)
 
     ttmp(:,:,:,1)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
-    call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
+    call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,2)
     v_1(:,:,2,:,np1) = ttmp(:,:,:,1)
 
     if(rmp_kind/=3)then
