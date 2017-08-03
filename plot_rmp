@@ -41,8 +41,8 @@ if (t<10){
 plot '< paste /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "mirrored",\
 '< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_00'.t.'.dat' u ($4-$2):1 w lp t "extrapol."
 }else{
-plot '< paste /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "mirrored",\
-'< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp t "extrapol."
+plot '< paste /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/conserved_TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp linecolor rgb "blue" t "mirrored",\
+'< paste /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_000.dat /scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/p_k_T_0'.t.'.dat' u ($4-$2):1 w lp linecolor rgb "black" t "extrapol."
 }
 
 unset multiplot
@@ -145,27 +145,28 @@ plot '< paste /scratch/cluster/mvalera/vrmp/run/p_k_u_000.dat /scratch/cluster/m
 
 unset multiplot
 
-if (t<10){ set output "vert_prof_Q_0".t.".png" } else { set output "vert_prof_Q_".t.".png" }
-set multiplot layout 1, 1 ;
+#if (t<10){ set output "vert_prof_Q_0".t.".png" } else { set output "vert_prof_Q_".t.".png" }
+#set multiplot layout 1, 1 ;
 
-set title "Vertical remap"
-set xlabel "Q dispersion"
-set ylabel "Q"
-set format y '%g'
-set key right bottom
-unset logscale y
+#set title "Vertical remap"
+#set xlabel "Q dispersion"
+#set ylabel "Q"
+#set format y '%g'
+#set key right bottom
+#unset logscale y
 
-if (t<10){
-plot "/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_001.dat" u 1 w lp t "t=0",\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_00".t.".dat" u 1 w lp linecolor rgb "blue" t "t=".t
-}else{
-plot "/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_001.dat" u 1 w lp t "t=0",\
-"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_0".t.".dat" u 1 w lp linecolor rgb "blue" t "t=".t
+#if (t<10){
+#plot "/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_001.dat" u 1 w lp t "t=0",\
+#"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_00".t.".dat" u 1 w lp linecolor rgb "blue" t "t=".t
+#}else{
+#plot "/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_001.dat" u 1 w lp t "t=0",\
+#"/scratch/cluster/mvalera/vrmp/run/TE_phi_nofilter/Q_eul_0".t.".dat" u 1 w lp linecolor rgb "blue" t "t=".t
+#}
+
+#unset multiplot
+
 }
 
-unset multiplot
-
-}
 #'convert -delay 20 -loop 0 *u*.png vrmp_u_TEcons_phi_nofilter.gif'
 #'convert -delay 20 -loop 0 *T*.png vrmp_T_TEcons_phi_nofilter.gif'
 #'rm -rf vert*.png'

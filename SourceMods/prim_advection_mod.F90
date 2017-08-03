@@ -991,9 +991,9 @@ contains
     use control_mod,            only : se_prescribed_wind_2d
     use dimensions_mod        , only : ntrac
     use dimensions_mod        , only : qsize_condensate_loading, qsize_condensate_loading_idx
-    use hack_vert_rmp        ! , only : get_levels,overwrite_state,write_data,write_data_TE,diagnostic,lhack_vert_rmp,diagnostic_eul,write_data_eul
+    use hack_vert_rmp      
     use spmd_utils            , only: masterproc
-    use physconst,              only: r_universal
+!    use physconst,              only: r_universal
     use MOM_remapping
 
     type (hybrid_t),  intent(in)    :: hybrid  ! distributed parallel structure (shared)
@@ -1015,7 +1015,7 @@ contains
     real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
     logical          :: remap_te,filtered,phi_inc,ppm,pqm  
-!    real(KIND=r8) :: r_universal
+    real(KIND=r8) :: r_universal
     real(KIND=r8) :: dpphi,kappa,ptop
     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
     type(remapping_CS)                  :: CS
@@ -1063,7 +1063,7 @@ contains
         dpphi = 0._r8
         q_test = 1.0_r8
         q_test(:,:,15) = 2.0_r8
-!        r_universal = 1.38065e-23*6.02214e26/28.966
+        r_universal = 1.38065e-23*6.02214e26/28.966
         kappa = r_universal/cpair
 
         call hack_vert_rmp_init(dp_star_moist,dp_moist,elem(ie)%state%t,elem(ie)%state%v,pint1,pint2,lnp1,lnp2,1,1)
@@ -1131,7 +1131,9 @@ contains
       !phi_inc  = .true.   !using Geopotential term inside TE
 
       if(pqm)then
-           call initialize_remapping(CSP,'PQM_IH6IH5',.true.,.true.,.true.,.true.)
+          call initialize_remapping(CSP,'PCM',.true.,.false.,.false.,.true.)
+!           call initialize_remapping(CSP,'PPM_IH4',.true.,.true.,.true.,.true.) 
+!           call initialize_remapping(CSP,'PQM_IH6IH5',.true.,.true.,.true.,.true.) 
       endif
 
       if(lhack_vert_rmp) then
@@ -1192,11 +1194,12 @@ call remap_back_forth(99,1,3,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%
 !                        elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
 !                        elem(ie)%state%t(:,:,:,np1)*cpair
 
-call remap_E_cons(2,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
-          ttmp = E_1
-          elem(ie)%state%t = t_1
-          elem(ie)%state%v = v_1
-          
+!call remap_E_cons(1,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,E_1,t_1,v_1,pint2_3d,elem,np1)
+!          ttmp = E_1
+!          elem(ie)%state%t = t_1
+!          elem(ie)%state%v = v_1
+        call remap_E_cons(1,dp_star_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,&
+                        dp_moist,ttmp,elem(ie)%state%t,elem(ie)%state%v,pint2_3d,elem,np1) 
           else
 
 call remap_T_cons(2,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,t_1,v_1,pint2_3d,elem,np1)

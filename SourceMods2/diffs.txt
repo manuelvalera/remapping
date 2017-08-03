@@ -1,0 +1,740 @@
+1d0
+< #define _B4B 1
+25c24
+<   use element_mod,            only: element_t,timelevels
+---
+>   use element_mod,            only: element_t
+50d48
+<   public :: hack_vert_rmp_init,remap_back_forth,remap_T_cons,remap_E_cons
+321,337d318
+< #ifdef _B4B
+<     do ie=nets,nete
+<       do q=qbeg,qend
+<         do k=kbeg,kend
+<           !OMP_COLLAPSE_SIMD 
+<           !DIR_VECTOR_ALIGNED
+<           do j=1,np
+<           do i=1,np
+<              elem(ie)%state%Qdp(i,j,k,q,np1_qdp) =               &
+<                    ( elem(ie)%state%Qdp(i,j,k,q,n0_qdp) + &
+<                      (rkstage-1)*elem(ie)%state%Qdp(i,j,k,q,np1_qdp) ) / rkstage
+<           enddo
+<           enddo
+<         enddo
+<       enddo
+<     enddo
+< #else
+354d334
+< #endif
+495,515d474
+< #ifdef _B4B
+<           do k = kbeg, kend
+<             !OMP_COLLAPSE_SIMD 
+<             !DIR_VECTOR_ALIGNED
+<             do j=1,np
+<             do i=1,np
+<                dpdiss(:,:) = elem(ie)%derived%dpdiss_ave(:,:,k)
+<             enddo
+<             enddo
+<             do q = qbeg, qend
+<               ! NOTE: divide by dp0 since we multiply by dp0 below
+<               !OMP_COLLAPSE_SIMD
+<               !DIR_VECTOR_ALIGNED
+<               do j=1,np
+<               do i=1,np
+<                  Qtens_biharmonic(i,j,k,q,ie)=Qtens_biharmonic(i,j,k,q,ie)*dpdiss(i,j)/dp0(k)
+<               enddo
+<               enddo
+<             enddo
+<           enddo
+< #else
+537d495
+< #endif
+985c943
+<     !i
+---
+>     !
+988c946
+<     use vertremap_mod,          only : remap1,remap1_nofilter,remap_Q_ppm,remap2
+---
+>     use vertremap_mod,          only : remap1, remap1_nofilter
+994,998c952,953
+<     use hack_vert_rmp        ! , only : get_levels,overwrite_state,write_data,write_data_TE,diagnostic,lhack_vert_rmp,diagnostic_eul,write_data_eul
+<     use spmd_utils            , only: masterproc
+<     use physconst,              only: r_universal
+<     use MOM_remapping
+< 
+---
+>     use dimensions_mod,         only : lcp_moist,qsize_condensate_loading_cp
+>     
+1009,1012c964,966
+<     integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
+<     character(len=256):: filename
+<     real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry,dp_s_inv
+<     real (kind=r8), dimension(np,np,nlev)  :: q_test,q_test_s
+---
+>     integer          :: ie,i,j,k,np1,nets,nete,np1_qdp,q, m_cnst
+>     real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist, dp_inv,dp_dry,dp_star_dry
+>     real (kind=r8), dimension(np,np,nlev)  :: internal_energy_star
+1014,1034c968,969
+<     real (kind=r8), dimension(np,np,nlev+1):: phi,pint1_3d,pint2_3d
+<     real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
+<     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
+<     logical          :: remap_te,filtered,phi_inc,ppm,pqm  
+< !    real(KIND=r8) :: r_universal
+<     real(KIND=r8) :: dpphi,kappa,ptop
+<     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
+<     type(remapping_CS)                  :: CS
+<     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
+< 
+< 
+<     real (kind=r8), dimension(np,np,nlev,2) :: E_0
+<     real (kind=r8), dimension(np,np,nlev,2) :: E_1
+< 
+<     real (kind=r8), dimension(np,np,2,nlev,3) :: v_0 
+<     real (kind=r8), dimension(np,np,2,nlev,3) :: v_1
+< 
+<     real (kind=r8), dimension(np,np,nlev,3) :: t_0  
+<     real (kind=r8), dimension(np,np,nlev,3) :: t_1
+< 
+< 
+---
+>     
+>     
+1050a986,998
+>       if (lcp_moist) then
+>         !
+>         ! compute internal energy on Lagrangian levels
+>         ! (do it here since qdp is overwritten by remap1)
+>         !
+>         internal_energy_star = cpair*elem(ie)%state%dp3d(:,:,:,np1)
+>         do q=1,qsize_condensate_loading
+>           m_cnst = qsize_condensate_loading_idx(q)
+>           internal_energy_star = internal_energy_star+&
+>                qsize_condensate_loading_cp(q)*elem(ie)%state%qdp(:,:,:,m_cnst,np1_qdp)
+>         end do
+>         internal_energy_star = internal_energy_star*elem(ie)%state%t(:,:,:,np1)
+>       end if
+1058,1060c1006,1015
+< 
+< 
+<   !Preserving old code
+---
+>       do k=1,nlev
+>         dp_dry(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+>              ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%psdry(:,:,np1)
+>         dp_star_dry(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
+>       enddo
+>       if (minval(dp_star_dry)<0) call endrun('negative dry layer thickness.  timestep or remap time too large B')
+>       !
+>       dp_star_moist(:,:,:) = dp_star_dry(:,:,:)
+>       do q=1,qsize_condensate_loading
+>         m_cnst = qsize_condensate_loading_idx(q)
+1062,1073c1017
+<                 dp_dry(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
+<                         ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%psdry(:,:,np1)
+<                 dp_star_dry(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
+<         enddo
+<         if (minval(dp_star_dry)<0) call endrun('negative dry layer thickness.  timestep or remap time too large B')
+<       !     
+<         dp_star_moist(:,:,:) = dp_star_dry(:,:,:)
+<         do q=1,qsize_condensate_loading
+<                 m_cnst = qsize_condensate_loading_idx(q)
+<                 do k=1,nlev
+<                         dp_star_moist(:,:,k)= dp_star_moist(:,:,k)+elem(ie)%state%Qdp(:,:,k,m_cnst,np1_qdp)
+<                 end do
+---
+>           dp_star_moist(:,:,k)= dp_star_moist(:,:,k)+elem(ie)%state%Qdp(:,:,k,m_cnst,np1_qdp)
+1075,1078c1019,1041
+<         if (minval(dp_star_moist)<0) call endrun('negative moist layer thickness.  timestep or remap time too large')
+<  
+<         call remap1(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,hybrid=hybrid)
+<   
+---
+>       end do
+>       if (minval(dp_star_moist)<0) call endrun('negative moist layer thickness.  timestep or remap time too large')
+>       
+>       call remap1(elem(ie)%state%Qdp(:,:,:,1:qsize,np1_qdp),np,1,qsize,qsize,dp_star_dry,dp_dry,hybrid=hybrid)
+>       !
+>       ! compute moist reference pressure level thickness
+>       !
+>       dp_moist(:,:,:) = dp_dry(:,:,:)
+>       do q=1,qsize_condensate_loading
+>         m_cnst = qsize_condensate_loading_idx(q)
+>         do k=1,nlev
+>           dp_moist(:,:,k) = dp_moist(:,:,k)+elem(ie)%state%Qdp(:,:,k,m_cnst,np1_qdp)
+>         end do
+>       end do
+>       if (minval(dp_star_moist)<0) call endrun('negative layer thickness.  timestep or remap time too large')
+>       
+>       dp_inv=1.0_R8/dp_moist !for efficiency
+>       
+>       !
+>       ! remap internal energy
+>       !      
+>       if (lcp_moist) then
+>         call remap1(internal_energy_star,np,1,1,1,dp_star_dry,dp_dry)
+1080,1082c1043,1045
+<         ! compute moist reference pressure level thickness
+<        
+<         dp_moist(:,:,:) = dp_dry(:,:,:)
+---
+>         ! compute sum c^(l)_p*m^(l)*dp on arrival (Eulerian) grid
+>         !       
+>         ttmp(:,:,:,2) = cpair*dp_dry
+1084,1087c1047,1048
+<                 m_cnst = qsize_condensate_loading_idx(q)
+<                 do k=1,nlev
+<                         dp_moist(:,:,k) = dp_moist(:,:,k)+elem(ie)%state%Qdp(:,:,k,m_cnst,np1_qdp)
+<                 end do
+---
+>           m_cnst = qsize_condensate_loading_idx(q)
+>           ttmp(:,:,:,2) = ttmp(:,:,:,2)+qsize_condensate_loading_cp(q)*elem(ie)%state%qdp(:,:,:,m_cnst,np1_qdp)
+1089,1120c1050,1059
+<         if (minval(dp_star_moist)<0) call endrun('negative layer thickness.  timestep or remap time too large')
+<         !Possible bug: should it be dp_moist here?
+<         dp_inv=1.0_R8/dp_moist !for efficiency
+<       end if                
+< 
+<       remap_te = .true.   !using Total Energy remapping instead of Temperature    
+<       pqm = .true.       !MOM REMAPS
+< 
+< 
+<       if(pqm)then
+<            call initialize_remapping(CSP,'PQM_IH6IH5',.true.,.true.,.true.,.true.)
+<       endif 
+<         
+<    !if not hack-remapping:
+< !*********************************************************************************************************
+< 
+<           !Need to compute the interfaces pint1,2:
+< 
+<           ptop = hvcoord%hyai(1)*hvcoord%ps0
+<           pint1_3d(:,:,1) = ptop
+<           pint2_3d(:,:,1) = ptop
+< 
+<           do k=1,nlev
+<             pint1_3d(:,:,k+1) = pint1_3d(:,:,k) + dp_star_moist(:,:,k)
+<             pint2_3d(:,:,k+1) = pint2_3d(:,:,k) + dp_moist(:,:,k)
+<           end do
+<    
+<           if(remap_te)then
+<                 ! remap u,v and cpair*T + .5 u^2
+<                 ttmp(:,:,:,1)=(elem(ie)%state%v(:,:,1,:,np1)**2 + &
+<                         elem(ie)%state%v(:,:,2,:,np1)**2)/2 + &
+<                         elem(ie)%state%t(:,:,:,np1)*cpair
+---
+>         elem(ie)%state%t(:,:,:,np1)=internal_energy_star/ttmp(:,:,:,2)
+>       else
+>         internal_energy_star(:,:,:)=elem(ie)%state%t(:,:,:,np1)*dp_star_moist
+>         call remap1(internal_energy_star,np,1,1,1,dp_star_moist,dp_moist)
+>         elem(ie)%state%t(:,:,:,np1)=internal_energy_star*dp_inv
+>       end if
+>       !
+>       ! back out temperature
+>       !
+>       if (lcp_moist) then
+1122,1124c1061
+< !!!!!!!!!!!!!        call remap2()
+<                    
+<           else
+---
+>       else
+1126,1135c1063,1080
+< !call remap_T_cons(2,dp_star_moist,elem(ie)%state%t,elem(ie)%state%v,pint1_3d,dp_moist,t_1,v_1,pint2_3d,elem,np1)
+< !          elem(ie)%state%t = t_1
+< !          elem(ie)%state%v = v_1
+< 
+<                 ttmp(:,:,:,1)=elem(ie)%state%t(:,:,:,np1)
+<           end if
+< 
+<           ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_star_moist
+<           call remap1(ttmp,np,1,1,1,dp_star_moist,dp_moist)
+<           elem(ie)%state%t(:,:,:,np1)=ttmp(:,:,:,1)*dp_inv  
+---
+>       end if
+>       
+>       ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist
+>       ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist
+>       ! remap with PPM filter: call remap1(ttmp,np,1,2,2,dp_star_moist,dp_moist)
+>       call remap1_nofilter(ttmp,np,2,dp_star_moist,dp_moist)
+>       
+>       if ( .not. se_prescribed_wind_2d ) &
+>            elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)*dp_inv
+>       if ( .not. se_prescribed_wind_2d ) &
+>            elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_inv
+> #ifdef REMAP_TE
+>         ! back out T from TE
+>       elem(ie)%state%t(:,:,:,np1) = &
+>            ( elem(ie)%state%t(:,:,:,np1) - ( (elem(ie)%state%v(:,:,1,:,np1)**2 + &
+>            elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair
+>       
+> #endif
+1137,1156d1081
+<           ttmp(:,:,:,1)=elem(ie)%state%v(:,:,1,:,np1)*dp_star_moist  !u
+<           ttmp(:,:,:,2)=elem(ie)%state%v(:,:,2,:,np1)*dp_star_moist  !v
+<           call remap2(ttmp,np,1,2,2,dp_star_moist,dp_moist)
+<          !        call remap1_nofilter(ttmp,np,2,dp_star,dp)
+< 
+<           if ( .not. se_prescribed_wind_2d ) &
+<                  elem(ie)%state%v(:,:,1,:,np1)=ttmp(:,:,:,1)*dp_inv    !u_rmp
+<           if ( .not. se_prescribed_wind_2d ) &
+<                  elem(ie)%state%v(:,:,2,:,np1)=ttmp(:,:,:,2)*dp_inv    !v_rmp
+<      
+<           if(remap_te)then
+<                 ! back out T from TE
+<                 elem(ie)%state%t(:,:,:,np1) = &
+<                 ( elem(ie)%state%t(:,:,:,np1) - ((elem(ie)%state%v(:,:,1,:,np1)**2 + &
+<                 elem(ie)%state%v(:,:,2,:,np1)**2)/2))/cpair           !T_rmp
+<           end if
+< 
+<       end if 
+< 
+< 
+1205d1129
+< 
+1207,1650d1130
+< 
+<   subroutine hack_vert_rmp_init(dp_star_moist,dp_moist,t,v,pint1,pint2,lnp1,lnp2,num,vel_0)
+< 
+<   use shr_kind_mod,           only: r8=>shr_kind_r8
+<   use hack_vert_rmp  
+< 
+<     use hybvcoord_mod, only          : hvcoord_t
+<     use vertremap_mod,          only : remap1,remap1_nofilter,remap_Q_ppm,remap2
+<     use hybrid_mod            , only : hybrid_t!, set_region_num_threads
+<     use fvm_control_volume_mod, only : fvm_struct
+<     use control_mod,            only : se_prescribed_wind_2d
+<     use dimensions_mod        , only : ntrac
+<     use dimensions_mod        , only : qsize_condensate_loading,qsize_condensate_loading_idx
+<     use hack_vert_rmp
+<     use spmd_utils            , only: masterproc
+<  
+< 
+<   real (kind=r8), dimension(np,np,nlev), intent(inout)  :: dp_moist,dp_star_moist
+<   real (kind=r8), dimension(nlev), intent(out) :: lnp1,lnp2 
+<   real (kind=r8), dimension(nlev) :: t0
+<   real (kind=r8), dimension(np,np,nlev,3),intent(inout) :: t
+<   real (kind=r8), dimension(np,np,2,nlev,3),intent(inout) :: v
+<   integer          :: i,j,k
+<   integer, intent(in) :: num,vel_0
+<   real(KIND=r8) :: dpphi,kappa
+<   real(KIND=r8), dimension(nlev+1), intent(inout) :: pint1,pint2
+< 
+<      !   call get_levels(num,pint1,pint2,t0) !option 1 is CAM5
+< 
+<         dp_star_moist = 0._r8 !initializing as zeros
+<         dp_moist = 0._r8
+< 
+<         do k=1,size(t0)
+<                  
+<                  dp_star_moist(:,:,k) = pint1(k+1)-pint1(k)
+<                  lnp1(k) = log(pint1(k+1))-log(pint1(k))
+<         
+<                  dp_moist(:,:,k) = pint2(k+1)-pint2(k)
+<                  lnp2(k) = log(pint2(k+1))-log(pint2(k))
+< 
+<                  t(:,:,k,:) = t0(k)
+<         end do
+< 
+<         if(vel_0==1)then
+<                 !setting velocities to zero:
+<                  v(:,:,1,:,:) = 0._r8
+<                  v(:,:,2,:,:) = 0._r8
+<         endif
+< 
+< end subroutine hack_vert_rmp_init
+< 
+<   subroutine remap_E_cons(rmp_kind,dp_0,E_0,t_0,v_0,pint_0,dp_1,E_1,t_1,v_1,pint_1,elem,np1)
+<   !This routine will remap an energy field from system 0 to system 1
+<   !conserving it's total budget, with different remapping algorithms,
+<   !following the total energy formula from Lin'04
+< 
+<   !I will add all the modules i was using in vertical_remap hoping for the best:
+< 
+<     use hybvcoord_mod, only          : hvcoord_t
+<     use vertremap_mod,          only : remap1,remap1_nofilter,remap_Q_ppm,remap2
+<     use hybrid_mod            , only : hybrid_t!, set_region_num_threads
+<     use fvm_control_volume_mod, only : fvm_struct
+<     use control_mod,            only : se_prescribed_wind_2d
+<     use dimensions_mod        , only : ntrac
+<     use dimensions_mod        , only : qsize_condensate_loading,qsize_condensate_loading_idx
+<     use hack_vert_rmp        
+<     use spmd_utils            , only: masterproc
+<     use physconst,              only: r_universal
+<     use MOM_remapping
+< 
+<     type (element_t), intent(inout) :: elem(:)
+< 
+<    !
+<     type (hvcoord_t) :: hvcoord
+<     real (kind=r8)   :: dt
+<     integer          :: ie,i,j,k,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
+<     character(len=256):: filename
+<     real (kind=r8), dimension(np,np,nlev)  :: dp_1_inv,dp_0_inv
+<     real (kind=r8), dimension(np,np,nlev)  :: q_test,q_test_s
+<     real (kind=r8), dimension(np,np,nlev,2):: ttmp
+<     real (kind=r8), dimension(np,np,nlev+1):: phi
+<     real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
+<     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
+<     logical          :: remap_te,filtered,phi_inc,ppm,pqm
+< !    real(KIND=r8) :: r_universal
+<     real(KIND=r8) :: dpphi,kappa
+<     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
+< !    type(remapping_CS)                  :: CS
+<     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
+< 
+<     integer, intent(in) :: rmp_kind,np1
+< 
+<     real (kind=r8), dimension(np,np,nlev,2),intent(in) :: E_0
+<     real (kind=r8), dimension(np,np,nlev,2),intent(inout) :: E_1
+< 
+<     real (kind=r8), dimension(np,np,2,nlev,3),intent(in) :: v_0  !Vel. last arg is 'timelevels'
+<     real (kind=r8), dimension(np,np,2,nlev,3),intent(out) :: v_1
+< 
+<     real (kind=r8), dimension(np,np,nlev,3),intent(in) :: t_0  !Temp. last arg same
+<     real (kind=r8), dimension(np,np,nlev,3),intent(out) :: t_1
+< 
+<     real (kind=r8), dimension(np,np,nlev),intent(in) :: dp_0,dp_1
+<     real (kind=r8), dimension(np,np,nlev+1),intent(in) :: pint_0,pint_1
+< 
+< 
+< 
+<     !============
+< !    rmp_kind(s):
+<     ! 1.- filtered (remap1_filter())
+<     ! 2.- ppm (remap_Q_ppm)
+<     ! 3.- mom (remapping_core_h() using method from vertical_remap())
+<     ! 4.- no filter (remap1_nofilter())
+<     !============
+< 
+< 
+<   !============
+<   ! cons_kind(s):
+<   ! 1.- Temperature conserving (no Kinetic or phi energies)
+<   ! 2.- Energy conserving (according to Lin'04 energy conservation formula)
+<   ! 3.- Energy conserving (according to Williamson'15 formula)
+<   !============
+< 
+< 
+<  
+<     unitn = 8 
+< !    r_universal = 1.38065e-23*6.02214e26/28.966
+<     kappa = r_universal/cpair
+< 
+<     phi_inc = .true.
+<     phi = 0._r8
+<     
+<     dp_0_inv = 1._r8/dp_0
+<     dp_1_inv = 1._r8/dp_1
+< 
+<     !Calculating energy at system 0 (E = K + CpT)
+<     ttmp(:,:,:,1) = (v_0(:,:,1,:,np1)**2 + v_0(:,:,2,:,np1)**2)/2._r8 + t_0(:,:,:,np1)*cpair 
+< 
+<     if(phi_inc)then
+<     !Calculating and adding Phi term to Energy:
+<       do k=nlev,1,-1
+< 
+<         phi(:,:,k) = phi(:,:,k+1) + r_universal*t_0(:,:,k,np1)*( log(pint_0(:,:,k+1)) - log(pint_0(:,:,k)) )
+< 
+<         ttmp(:,:,k,1)= ttmp(:,:,k,1) + (pint_0(:,:,k+1)*phi(:,:,k+1) - &
+<                        pint_0(:,:,k)*phi(:,:,k))*dp_0_inv(:,:,k) !Energy  
+< 
+<       end do
+<     end if
+< 
+<     ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_0 !E*dp_0 
+<     call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,1)
+<     t_1(:,:,:,np1) = ttmp(:,:,:,1)   !E_rmp*dp_1
+< 
+<     if(rmp_kind/=3)then
+<          t_1(:,:,:,np1)=ttmp(:,:,:,1)*dp_1_inv  !E_rmp
+<     !         q_test_s(:,:,:) = elem(ie)%state%Qdp(:,:,:,6,np1_qdp)/dp_dry(:,:,:)
+<     end if
+< 
+<     !Remap velocities:
+< 
+<     ttmp(:,:,:,1)=v_0(:,:,1,:,np1)*dp_0 !u*dp_0
+<     call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,2)
+<     v_1(:,:,1,:,np1) = ttmp(:,:,:,1)
+< 
+<     ttmp(:,:,:,1)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
+<     call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,2)
+<     v_1(:,:,2,:,np1) = ttmp(:,:,:,1)
+< 
+<     if(rmp_kind/=3)then
+<             if ( .not. se_prescribed_wind_2d ) &
+<                  v_1(:,:,1,:,np1)=v_1(:,:,1,:,np1)*dp_1_inv    !u_rmp
+<             if ( .not. se_prescribed_wind_2d ) &
+<                  v_1(:,:,2,:,np1)=v_1(:,:,2,:,np1)*dp_1_inv    !v_rmp
+<     endif
+< 
+<     ttmp(:,:,:,1)=t_1(:,:,:,np1) !E_rmp as t
+<     E_1 = ttmp
+<  
+<     !Recover Temperature from Energy (Lin'04):
+<     if(phi_inc)then
+<       do k=nlev,1,-1
+<          num_tmp(:,:,k) = t_1(:,:,k,np1) - ((v_1(:,:,1,k,np1)**2 + v_1(:,:,2,k,np1)**2)/2._r8) - phi(:,:,k+1)
+< 
+<          num_tmp(:,:,k) = num_tmp(:,:,k)/cpair
+<          den_tmp(:,:,k) = 1 - pint_1(:,:,k)*kappa*(log(pint_1(:,:,k+1))-log(pint_1(:,:,k)))*dp_1_inv(:,:,k)
+<          t_1(:,:,k,np1) = num_tmp(:,:,k)/den_tmp(:,:,k) !T_rmp              
+<          phi(:,:,k) = phi(:,:,k+1)+r_universal*t_1(:,:,k,np1)*&
+<                           (log(pint_1(:,:,k+1))-log(pint_1(:,:,k))) !phi_rmp
+<       end do
+<     else
+<          t_1(:,:,:,np1) = ( t_1(:,:,:,np1) - (v_1(:,:,1,:,np1)**2 + v_1(:,:,2,:,np1)**2)/2._r8)/cpair  !T_rmp (E_rmp as t is used)
+<     end if
+<   
+<   end subroutine remap_E_cons
+< 
+<   subroutine remap_T_cons(rmp_kind,dp_0,t_0,v_0,pint_0,dp_1,t_1,v_1,pint_1,elem,np1)
+<     use hybvcoord_mod, only          : hvcoord_t
+<     use vertremap_mod,          only : remap1,remap1_nofilter,remap_Q_ppm,remap2
+<     use hybrid_mod            , only : hybrid_t!, set_region_num_threads
+<     use fvm_control_volume_mod, only : fvm_struct
+<     use control_mod,            only : se_prescribed_wind_2d
+<     use dimensions_mod        , only : ntrac
+<     use dimensions_mod        , only : qsize_condensate_loading,qsize_condensate_loading_idx
+<     use hack_vert_rmp
+<     use spmd_utils            , only: masterproc
+<     !use physconst,              only: r_universal
+<     use MOM_remapping
+< 
+<     type (element_t), intent(inout) :: elem(:)
+< 
+<    !
+<     type (hvcoord_t) :: hvcoord
+<     real (kind=r8)   :: dt
+<     integer          :: ie,i,j,k,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
+<     character(len=256):: filename
+<     real (kind=r8), dimension(np,np,nlev)  :: dp_0_inv,dp_1_inv
+<     real (kind=r8), dimension(np,np,nlev)  :: q_test,q_test_s
+<     real (kind=r8), dimension(np,np,nlev,2):: ttmp
+<     real (kind=r8), dimension(np,np,nlev+1):: phi
+<     real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
+<     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
+<     logical          :: remap_te,filtered,phi_inc,ppm,pqm
+<     real(KIND=r8) :: r_universal
+<     real(KIND=r8) :: dpphi,kappa
+<     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
+< !    type(remapping_CS)                  :: CS
+<     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
+< 
+<     integer, intent(in) :: rmp_kind,np1
+< 
+< !    real (kind=r8), dimension(np,np,nlev,2),intent(in) :: E_0
+< !    real (kind=r8), dimension(np,np,nlev,2),intent(out) :: E_1
+< 
+<     real (kind=r8), dimension(np,np,2,nlev,timelevels),intent(in) :: v_0  !Vel. last arg is 'timelevels'
+<     real (kind=r8), dimension(np,np,2,nlev,timelevels),intent(inout) :: v_1
+< 
+<     real (kind=r8), dimension(np,np,nlev,timelevels),intent(in) :: t_0  !Temp. last arg same
+<     real (kind=r8), dimension(np,np,nlev,timelevels),intent(inout) :: t_1
+< 
+<     real (kind=r8), dimension(np,np,nlev),intent(in) :: dp_0,dp_1
+<     real (kind=r8), dimension(np,np,nlev+1),intent(in) :: pint_0,pint_1
+< 
+< 
+<     dp_0_inv = 1._r8/dp_0
+<     dp_1_inv = 1._r8/dp_1
+< 
+<     
+<     ttmp(:,:,:,1) = t_0(:,:,:,np1) !T        
+<     !    elem(ie)%state%Qdp(:,:,:,6,np1_qdp) = q_test(:,:,:)*dp_star_dry(:,:,:)
+<   
+<     ttmp(:,:,:,1)=ttmp(:,:,:,1)*dp_0 !T*dp_star_moist
+< 
+<     call remap2(ttmp,np,1,1,1,dp_0,dp_1,rmp_kind,1)
+< 
+<     t_1(:,:,:,np1) = ttmp(:,:,:,1)   !E_rmp*dp_1
+< 
+<     if(rmp_kind/=3)then
+<             t_1(:,:,:,np1)=ttmp(:,:,:,1)*dp_1_inv  !T_rmp 
+< !            q_test_s(:,:,:) = elem(ie)%state%Qdp(:,:,:,6,np1_qdp)/dp_dry(:,:,:)
+<     end if
+< 
+<     !Remap velocities:
+< 
+<     ttmp(:,:,:,1)=v_0(:,:,1,:,np1)*dp_0 !u*dp_0
+<     call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
+<     v_1(:,:,1,:,np1) = ttmp(:,:,:,1)
+< 
+< 
+<     ttmp(:,:,:,1)=v_0(:,:,2,:,np1)*dp_0 !v*dp_0
+<     call remap2(ttmp,np,1,2,2,dp_0,dp_1,rmp_kind,2)
+<     v_1(:,:,2,:,np1) = ttmp(:,:,:,1)
+< 
+<     if(rmp_kind/=3)then
+<             if ( .not. se_prescribed_wind_2d ) &
+<                  v_1(:,:,1,:,np1)=v_1(:,:,1,:,np1)*dp_1_inv    !u_rmp
+<             if ( .not. se_prescribed_wind_2d ) &
+<                  v_1(:,:,2,:,np1)=v_1(:,:,2,:,np1)*dp_1_inv    !v_rmp
+<     endif    
+< 
+<   end subroutine remap_T_cons
+< 
+< 
+<   subroutine remap_back_forth(num_times,cons_kind,rmp_kind,dp_0,E_0,t_0,v_0,pint_0,dp_1,E_1,t_1,v_1,pint_1,elem,np1) 
+<   !This routine remaps the same quantity back and forth and generates files for
+<   !further diagnosis of the remapping algorithm.
+<   
+< 
+<     use hybvcoord_mod, only          : hvcoord_t
+<     use vertremap_mod,          only : remap1,remap1_nofilter,remap_Q_ppm,remap2
+<     use hybrid_mod            , only : hybrid_t!, set_region_num_threads
+<     use fvm_control_volume_mod, only : fvm_struct
+<     use control_mod,            only : se_prescribed_wind_2d
+<     use dimensions_mod        , only : ntrac
+< !    use dimensions_mod        , only : size_condensate_loading,qsize_condensate_loading_idx
+<     use hack_vert_rmp
+<     use spmd_utils            , only: masterproc
+<     !use physconst,              only: r_universal
+<     use MOM_remapping
+< 
+<     type (element_t), intent(inout) :: elem(:)
+< 
+<    !THESE variables declaration is mostly a copy paste from vertical_remap,
+<    !needs cleaning
+<     type (hvcoord_t) :: hvcoord
+<     real (kind=r8)   :: dt
+<     integer          :: ie,i,j,k,nets,nete,np1_qdp,q, m_cnst,temp_int,unitn
+<     character(len=256):: filename
+< !    real (kind=r8), dimension(np,np,nlev)  :: dp_moist,dp_star_moist,dp_inv,dp_dry,dp_star_dry,dp_s_inv
+<     real (kind=r8), dimension(np,np,nlev)  :: q_test,q_test_s
+<     real (kind=r8), dimension(np,np,nlev,2):: ttmp
+<     real (kind=r8), dimension(np,np,nlev+1):: phi
+<     real(KIND=r8), dimension(nlev+1) :: pint1,pint2,dx1
+<     real(KIND=r8), dimension(nlev) :: t0,lnp1,lnp2
+<     logical          :: remap_te,filtered,phi_inc,ppm,pqm
+<     real(KIND=r8) :: r_universal
+<     real(KIND=r8) :: dpphi,kappa
+<     real(KIND=r8),dimension(np,np,nlev) :: num_tmp,den_tmp
+< !    type(remapping_CS)                  :: CS
+<     real, dimension(nlev) :: dp_mom,ttmp_mom,dp_s_mom,ttmp_s_mom,qdp_tmp,qdp_s_tmp
+< 
+<     integer, intent(in) :: num_times,cons_kind,rmp_kind,np1
+< 
+<     real (kind=r8), dimension(np,np,nlev,2),intent(inout) :: E_0
+<     real (kind=r8), dimension(np,np,nlev,2),intent(inout) :: E_1
+< 
+<     real (kind=r8), dimension(np,np,2,nlev,timelevels),intent(inout) :: v_0  !Vel. last arg is 'timelevels'
+<     real (kind=r8), dimension(np,np,2,nlev,timelevels),intent(inout) :: v_1
+< 
+<     real (kind=r8), dimension(np,np,nlev,timelevels),intent(inout) :: t_0  !Temp. last arg same as v
+<     real (kind=r8), dimension(np,np,nlev,timelevels),intent(inout) :: t_1
+< 
+<     real (kind=r8), dimension(np,np,nlev),intent(in) :: dp_0,dp_1
+<     real (kind=r8), dimension(np,np,nlev+1),intent(in) :: pint_0,pint_1
+< 
+<     !============
+< !    cons_kind(s):
+<     ! 1.- Temperature conserving (no Kinetic or phi energies)
+<     ! 2.- Energy conserving (according to Lin'04 energy conservation formula: 
+<     ! TE = K + CpT + Phi
+<     ! 3.- Energy conserving (according to Williamson'15 formula)
+<     ! TE = K + CpT
+<     !============
+< 
+< 
+<     !============
+< !    rmp_kind(s):
+<     ! 1.- filtered (remap1_filter())
+<     ! 2.- ppm (remap_Q_ppm)
+<     ! 3.- mom (remapping_core_h() using method from vertical_remap() line 1131
+<     ! -> initialize_remapping())
+<     ! 4.- no filter (remap1_nofilter())
+<     !============
+< 
+<     
+<     phi = 0._r8
+<     unitn = 8
+<    
+< 
+<     if(cons_kind==2)then    
+<         do i = 1,num_times
+<                 call remap_E_cons(rmp_kind,dp_0,E_0,t_0,v_0,pint_0,dp_1,E_1,t_1,v_1,pint_1,elem,np1)
+< !                if(masterproc)then
+< !                        if(i==1)then
+< !                                write (filename, '("TE_eul.dat")' )
+< !                                open(unitn, file=trim(filename),status='replace')
+< !                                write(unitn,*) SUM(t_1(1,1,:,np1)*dp_1(1,1,:)),cpair
+< !                                close(unitn)
+< !                          else
+< !                                write (filename, '("TE_eul.dat")' )
+< !                                open(unitn,file=trim(filename),status='old',position='append')
+< !                                write(unitn,*) SUM(t_1(1,1,:,np1)*dp_1(1,1,:) )
+< !                                close(unitn)
+< !                          end if
+< !                        endif  
+<         !        if(masterproc)then
+<         !                if(i==1)then
+<         !                        write (filename, '("Q_eul_",I0.3,".dat")' ) i
+<         !                        open(unitn,file=trim(filename),status='replace')
+<         !                        do k=1,nlev
+<         !                         if(pqm)then
+<         !                           write(unitn,*) qdp_tmp(k)
+< !elem(ie)%state%Qdp(1,1,k,6,np1_qdp)
+<         !                        else
+<         !                           write(unitn,*) q_test_s(1,1,k)
+<         !                         endif
+<         !                        enddo
+<         !                        close(unitn)
+<         !                else
+<         !                       write (filename, '("Q_eul_",I0.3,".dat")' ) i
+<         !                       open(unitn,file=trim(filename),status='replace')
+<         !                       do k=1,nlev
+<         !                        if(pqm)then
+<         !                              write(unitn,*) qdp_tmp(k)
+< !elem(ie)%state%Qdp(1,1,k,6,np1_qdp)
+<                                                !elem(ie)%state%Qdp(1,1,k,6,np1_qdp)!*dp_moist(1,1,k)
+<         !                        else
+<         !                              write(unitn,*) q_test_s(1,1,k)
+<         !                        endif
+<         !                       enddo
+<         !                       close(unitn)
+<         !        end if
+<         !                endif
+<         
+<                 call remap_E_cons(rmp_kind,dp_1,E_1,t_1,v_1,pint_1,dp_0,E_0,t_0,v_0,pint_0,elem,np1)
+< 
+<                 !WRITE FILES lagrangian stage i
+<       !          call write_data(pint_0(1,1,:),t_0(1,1,:,np1),v_0(1,1,1,:,np1),i)
+<       !          call write_data_TE(pint_0(1,1,:),t_0(1,1,:,np1),i)
+<                 call diagnostic(dp_0*v_0(:,:,1,:,np1),&
+<                                 dp_0*t_0(:,:,:,np1)*cpair,&
+<                                 dp_0*((v_0(:,:,1,:,np1)**2 +v_0(:,:,2,:,np1)**2)/2._r8),0._r8,i)
+< 
+<                 if(i==num_times)then
+<                       exit
+<                 endif
+<         enddo
+< 
+<     elseif(cons_kind==1)then
+<         do i = 1,num_times
+<                 call remap_T_cons(rmp_kind,dp_0,t_0,v_0,pint_0,dp_1,t_1,v_1,pint_1,elem,np1)
+< 
+<                 !WRITE FILES eulerian ?
+< 
+<                 call remap_T_cons(rmp_kind,dp_1,t_1,v_1,pint_1,dp_0,t_0,v_0,pint_0,elem,np1)
+< 
+<                 !WRITE FILES lagrangian stage i
+<        !         call write_data(pint_0(1,1,:),t_0(1,1,:,np1),v_0(1,1,1,:,np1),i)
+< 
+<                 call diagnostic(dp_0*v_0(:,:,1,:,np1),&
+<                                 dp_0*t_0(:,:,:,np1)*cpair,&
+<                                 dp_0*((v_0(:,:,1,:,np1)**2 + v_0(:,:,2,:,np1)**2)/2._r8),0._r8,i)
+< 
+< 
+<                 if(i==num_times)then
+<                         exit
+<                 endif
+<         enddo
+<     
+<     end if
+< 
+< 
+< !    call exit(0) 
+< 
+<    end subroutine remap_back_forth

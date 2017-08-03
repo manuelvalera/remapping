@@ -521,8 +521,10 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
          dpo(nlev+k) = dpo(nlev+1-k)
       enddo
 
-      extrap = 0 ! 0 = mirrored, 1 = linear, 2 = lagrangian
+      extrap = 1 ! 0 = mirrored, 1 = linear, 2 = lagrangian
       !defining the pressure inside cell to extrapolate ao later
+      ao_extrap = 1
+
 
       if(extrap==1)then
       !LINEAR:
@@ -635,7 +637,7 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
         enddo
 
         extrap = 0
-        ao_extrap = 0
+       !ao_extrap = 0 
 
         !Fill in ghost values. Ignored if vert_remap_q_alg == 2
         do k = 1 , gs
@@ -644,19 +646,19 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
         enddo
 
         !LINEAR:
-        if(extrap==1)then
+!        if(extrap==1)then
          !extrapolating ao (scalar quant.):
          !left:
 !         if(pio_c(1) - pio_c(2) /= 0) then
 !                        ao(0) = ao(2) + (( pio_c(0) - pio_c(2) )/( pio_c(1) - pio_c(2)  ))*( ao(1 )- ao(2) )  
-                        ao(0) = ao(2) + (( 0 - 2 )/( 1 - 2  ))*( ao(1)- ao(2) )  
+!                        ao(0) = ao(2) + (( 0 - 2 )/( 1 - 2  ))*( ao(1)- ao(2) )  
 !         else
 !                ao(0) = ao(1)
 !         endif
 
 !         if( pio_c(0) - pio_c(1) /=0)then
 !                        ao(-1) = ao(1) + (( pio_c(-1) - pio_c(1) )/( pio_c(0) - pio_c(1) ))*( ao(0)- ao(1) )   
-                        ao(-1) = ao(1) + (( -1 - 1 )/( 0 - 1 ))*( ao(0)- ao(1) )   
+!                        ao(-1) = ao(1) + (( -1 - 1 )/( 0 - 1 ))*( ao(0)- ao(1) )   
 !         else
 !                 ao(-1) = ao(0)
 !         endif
@@ -675,15 +677,17 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
 !         else
 !                 ao(nlev+2) = ao(nlev+1)
 !         endif
-       endif
+!       endif
 
        if(ao_extrap==1)then
        !LAGRANGIAN:
       
        x_i(1:4) =  (/1., 4., 6., 15./)                 !taking 4 indexes to interpolate ! 2-4-6-11
+!       x_i(1:4) =  (/2., 4., 6., 11./)                 !taking 4 indexes to interpolate ! 
 !       x_i(1:4) =  (/pio_c(2), pio_c(4), pio_c(6), pio_c(11)/)                 !taking 4 indexes to interpolate 
-       f_i(1:4) =  (/ao(1), ao(4), ao(6), ao(15)/) !and it's value in y-axis
 
+       f_i(1:4) =  (/ao(1), ao(4), ao(6), ao(15)/) !and it's value in y-axis
+!       f_i(1:4) =  (/ao(2), ao(4), ao(6), ao(11)/) !and it's value in y-axis
        
       do x_p = 0,-1,-1
        pio_l = 0.0d0    
@@ -702,7 +706,7 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
 
 
        x_i(1:4) =  (/nlev, nlev-4, nlev-6, nlev-11/)                
-!       x_i(1:4) =  (/pio_c(nlev), pio_c(nlev-4), pio_c(nlev-6), pio_c(nlev-11)/) 
+        !       x_i(1:4) =  (/pio_c(nlev), pio_c(nlev-4), pio_c(nlev-6), pio_c(nlev-11)/) 
        f_i(1:4) =  (/ao(nlev), ao(nlev-4), ao(nlev-6), ao(nlev-11)/) 
 
       do x_p = nlev+1,nlev+2
@@ -712,28 +716,28 @@ subroutine remap_Q_ppm(Qdp,nx,qstart,qstop,qsize,dp1,dp2,field)
          do kk = 1,4
                 if(m/=kk)then
                     lag(m) = lag(m)*( x_p  - x_i(kk))/( x_i(m) - x_i(kk) ) !x_i indices
-!                    lag(m) = lag(m)*( pio_c(x_p)  - x_i(kk))/( x_i(m) - x_i(kk))
+        !                    lag(m) = lag(m)*( pio_c(x_p)  - x_i(kk))/( x_i(m) - x_i(kk))
                 end if
          enddo
          pio_l = pio_l + f_i(m)*lag(m)
        enddo      
-!       ao(x_p) = pio_l
+       ao(x_p) = pio_l
       enddo
       end if
 
 
-!      if(masterproc .and. field==1 )then
-!            write (filename, '("ao_extrap.dat")' )
-!            open(unitn, file=trim(filename),status='replace') !'old',position='append' )
-!            do k=-1,nlev+2
-!                if(k>0 .and. k<nlev+1)then
-!                write(unitn,*) ao(k),Qdp(1,1,k,1)
-!                else
-!                write(unitn,*) ao(k)
-!                endif
-!            enddo
-!            close(unitn)
-!       endif
+      if(masterproc .and. field==1 )then
+            write (filename, '("ao_extrap.dat")' )
+            open(unitn, file=trim(filename),status='replace') !'old',position='append' )
+            do k=-1,nlev+2
+                if(k>0 .and. k<nlev+1)then
+                write(unitn,*) ao(k),Qdp(1,1,k,1)
+                else
+                write(unitn,*) ao(k)
+                endif
+            enddo
+            close(unitn)
+       endif
 
 
         !Compute monotonic and conservative PPM reconstruction over every cell
